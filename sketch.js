@@ -100,6 +100,7 @@ function finishedLoading() {
         settingControl = 'restart'; setControl(27);
     });
 
+    initThreeRenderer();
     gameState = gameStates.MENU;
 }
 
@@ -112,10 +113,17 @@ function draw() {
         cursor();
         return;
     }
+
     controllerKeyPressed();
+
     if (gameState == gameStates.INGAME) {
         game.update();
-        showGame(false); //Show the game, (and it's not paused)
+
+        renderThreeFromGame(game, false);
+
+        // Optionally still draw 2D HUD / UI
+        showGame(false);
+
         if (!game.alive) {
             if (!game.practice)
                 setHighScores(game.score, game.lines, true);
@@ -123,7 +131,12 @@ function draw() {
             dom.playDiv.show();
         }
     } else if (gameState == gameStates.PAUSED) {
-        showGame(true); //If paused, show empty grid
+        // 3D board in frozen state
+        if (game) {
+            renderThreeFromGame(game, true);
+        }
+
+        showGame(true); // existing paused overlay / HUD
         fill(255);
         stroke(0);
         textSize(30);
@@ -131,6 +144,8 @@ function draw() {
         text('PAUSED', width/2, height/3);
     }
 }
+
+
 
 function newGame(practice) {
     if (gameState == gameStates.LOADING) return;
