@@ -67,7 +67,7 @@ function setup() {
     updateVolume(); //Set it to be synced with the localStorage saved volume
 
     showBlankGame();
-
+    initSound();
     resizeDOM();
 
   window.addEventListener("gamepadconnected", e => {

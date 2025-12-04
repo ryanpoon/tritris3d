@@ -377,7 +377,7 @@ class ThreeTritrisRenderer {
                 textColor: '#ffcc00',
                 bgColor: 'rgba(0,0,0,0.7)',
                 scale: 0.02,
-                textAlign: 'middle'
+                textAlign: 'left'
             });
             pausedSprite.position.set(0, 0, 1.0);
             this.uiGroup.add(pausedSprite);
@@ -415,6 +415,7 @@ class ThreeTritrisRenderer {
                         if (!this.prevLocked.has(key)) {
                             newlyLocked.push({ row, col, subRow, subCol, clr: colorIndex });
                             if (newlyLocked.length == 1) {
+                                sfx.play("lock", Math.random() * 400 + 600);
                                 this.startBoardBounce();
                             }
 
@@ -820,6 +821,7 @@ class ThreeTritrisRenderer {
 
     triggerLightshow() {
         console.log("Triggering light show!");
+        sfx.play("lightshow");
 
         this.lightshowTime = 0.4;
         this.lightshowElapsed = 0;
@@ -839,8 +841,10 @@ class ThreeTritrisRenderer {
     }
 
     triggerLineClear(rows) {
+        if (rows.length == 1) sfx.play("lineclear", -400);
+        if (rows.length == 2) sfx.play("lineclear", -700);
         this.lineClearRows = rows.slice();    
-        this.lineClearTime = 0.45; 
+        this.lineClearTime = 0.15; 
         this.lineClearElapsed = 0;
         this.lineClearEffects = [];
 
