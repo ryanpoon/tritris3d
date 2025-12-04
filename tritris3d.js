@@ -25,6 +25,17 @@ function renderThreeFromGame(game, paused) {
         threeRenderer.triggerLightshow();
         game.tritrisJustHappened = false;
     }
+    // detect when line animation begins
+    if (game.animatingLines && game.animatingLines.length > 0 && !threeRenderer.lineClearActive) {
+        threeRenderer.triggerLineClear(game.animatingLines);
+        threeRenderer.lineClearActive = true; 
+    }
+
+    // detect when the default animation ends
+    if (threeRenderer.lineClearActive && game.animatingLines.length === 0) {
+        threeRenderer.lineClearActive = false;  
+    }
+
 
     threeRenderer.updateFromGame(game, paused);
     threeRenderer.render();
@@ -33,14 +44,14 @@ function renderThreeFromGame(game, paused) {
 class ThreeTritrisRenderer {
     constructor() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x202020);
+        this.scene.background = new THREE.Color(0x2e2d2d);
 
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
 
         // Board centered around (0,0,0) in XY plane, camera in +Z looking toward origin.
         // Put the camera up/right and forward a bit, looking toward center.
-        this.camera.position.set(0, 0, 32);   // centered left/right, above the board, forward
+        this.camera.position.set(0, 2, 32);   // centered left/right, above the board, forward
         this.camera.lookAt(0, 0, 0);           // look at middle of board
         this.camera.up.set(0, 1, 0);     
 
@@ -106,7 +117,11 @@ class ThreeTritrisRenderer {
         // Board dimensions 
         this.boardWidth = 8;
         this.boardHeight = 16;
-        this.cellSize = 1.0;
+        this.cellSize = 1.4;
+
+        this.bounceTime = 0;
+        this.bounceDuration = 0.35; 
+        this.bounceHeight = 0.70;  
 
         // Colors by triangle color index, mirroring Game.colors order. 
         this.colors = [
@@ -279,7 +294,7 @@ class ThreeTritrisRenderer {
         canvas.height = fontSize + padding * 2;
 
         ctx.font = `${fontSize}px ${fontFace}`;
-        ctx.textAlign = 'left';
+        ctx.textAlign = options.textAlign || 'left';
         ctx.textBaseline = 'middle';
 
         // glow
@@ -308,6 +323,9 @@ class ThreeTritrisRenderer {
 
         const sprite = new THREE.Sprite(material);
         sprite.scale.set(canvas.width * scale, canvas.height * scale, 1);
+        if (!options.textAlign) {
+            sprite.center.set(0, 0.5);
+        } 
 
         return sprite;
     }
@@ -325,12 +343,12 @@ class ThreeTritrisRenderer {
         if (!game) return;
 
         // Score / lines / level text
-        const scoreText = `Score ${game.score}`;
+        const scoreText = `Score: ${game.score}`;
         const linesText = `Lines ${game.lines}`;
         const levelText = `Level ${game.level}`;
 
         const scoreSprite = this._makeTextSprite(scoreText, {
-            fontSize: 72,
+            fontSize: 56,
             scale: 0.015
         });
         const linesSprite = this._makeTextSprite(linesText, {
@@ -343,13 +361,13 @@ class ThreeTritrisRenderer {
         });
 
         // Position the UI to the right of the board in world space
-        const baseX = (this.boardWidth / 2 - 12) * this.cellSize;
-        const baseY = (this.boardHeight / 2 - 1) * this.cellSize;
+        const baseX = (this.boardWidth / 2 + 1.0) * this.cellSize;
+        const baseY = (this.boardHeight / 2 - 1.5) * this.cellSize;
         const z = 0.6;
 
         scoreSprite.position.set(baseX, baseY, z);
-        linesSprite.position.set(baseX, baseY - this.cellSize * 1.5, z);
-        levelSprite.position.set(baseX, baseY - this.cellSize * 3.0, z);
+        linesSprite.position.set(baseX, baseY - this.cellSize * 1.0, z);
+        levelSprite.position.set(baseX, baseY - this.cellSize * 2.0, z);
 
         this.uiGroup.add(scoreSprite, linesSprite, levelSprite);
         
@@ -358,7 +376,8 @@ class ThreeTritrisRenderer {
                 fontSize: 96,
                 textColor: '#ffcc00',
                 bgColor: 'rgba(0,0,0,0.7)',
-                scale: 0.02
+                scale: 0.02,
+                textAlign: 'middle'
             });
             pausedSprite.position.set(0, 0, 1.0);
             this.uiGroup.add(pausedSprite);
@@ -395,6 +414,10 @@ class ThreeTritrisRenderer {
 
                         if (!this.prevLocked.has(key)) {
                             newlyLocked.push({ row, col, subRow, subCol, clr: colorIndex });
+                            if (newlyLocked.length == 1) {
+                                this.startBoardBounce();
+                            }
+
                         }
 
                         this._addTriangleMesh(
@@ -412,15 +435,16 @@ class ThreeTritrisRenderer {
         }
 
         // spawn placement particles and shockwave for newly locked cells
-        for (const cell of newlyLocked) {
-            const worldX = (cell.col - this.boardWidth / 2 + 0.5) * this.cellSize;
-            const worldY = (this.boardHeight / 2 - cell.row - 0.5) * this.cellSize;
-            const colorHex = this.colors[cell.clr];
+        if (newlyLocked.length < 4){
+            for (const cell of newlyLocked) {
+                const worldX = (cell.col - this.boardWidth / 2 + 0.5) * this.cellSize;
+                const worldY = (this.boardHeight / 2 - cell.row - 0.5) * this.cellSize;
+                const colorHex = this.colors[cell.clr];
 
-            this.spawnPlacementParticles(worldX, worldY, colorHex);
-            this.spawnShockwave(worldX, worldY, colorHex);
+                this.spawnParticles(worldX, worldY, colorHex);
+                this.spawnShockwave(worldX, worldY, colorHex);
+            }
         }
-
         this.prevLocked = currentLocked
 
 
@@ -496,8 +520,8 @@ class ThreeTritrisRenderer {
         const pieceH = maxR - minR + 1;
 
         // where the preview should appear in world space
-        const previewCenterX = (this.boardWidth / 2 + 3) * this.cellSize;
-        const previewCenterY = (this.boardHeight / 2 - 2) * this.cellSize;
+        const previewCenterX = (this.boardWidth / 2 + 2.5) * this.cellSize;
+        const previewCenterY = (this.boardHeight / 2 - 6) * this.cellSize;
 
         // create a fresh pivot group for this frame 
         const pivot = new THREE.Group();
@@ -505,9 +529,9 @@ class ThreeTritrisRenderer {
         this.nextPiecePivot = pivot;   // remember for rotation in render()
 
         // glowing box around the piece 
-        const glowSizeX = 1.5 * this.cellSize + 1.0;
-        const glowSizeY = 1.5 * this.cellSize + 1.0;
-        const glowSizeZ = 2.5;
+        const glowSizeX = 1.5 * this.cellSize + 1.5;
+        const glowSizeY = 1.5 * this.cellSize + 1.5;
+        const glowSizeZ = 1.5 * this.cellSize + 1.5
 
         const glowGeo = new THREE.BoxGeometry(glowSizeX, glowSizeY, glowSizeZ);
         const glowMat = new THREE.MeshBasicMaterial({
@@ -520,7 +544,7 @@ class ThreeTritrisRenderer {
         this.nextPieceGroup.add(glowMesh);
         this.nextPieceGlow = glowMesh;
         glowMesh.position.set(previewCenterX, previewCenterY, 0.3);
-
+        glowMesh.rotation.y = -0.2;
 
         // add all triangles as children of the pivot 
         for (let r = 0; r < rows; r++) {
@@ -579,6 +603,8 @@ class ThreeTritrisRenderer {
                 emissiveIntensity: 1.6,   
                 metalness: 0.2,
                 roughness: 0.2,
+                transparent: true,
+                opacity: 0.8,
                 side: THREE.DoubleSide
             });
         } else {
@@ -618,7 +644,7 @@ class ThreeTritrisRenderer {
         const w = this.boardWidth;
         const h = this.boardHeight;
         const s = this.cellSize;
-        const z = -0;
+        const z = 0.5;
 
         // horizontal lines
         for (let r = 0; r <= h; r++) {
@@ -670,7 +696,7 @@ class ThreeTritrisRenderer {
         this.stars = stars;
     };
 
-    spawnPlacementParticles(worldX, worldY, colorHex, speedMultiplier = 1.0) {
+    spawnParticles(worldX, worldY, colorHex, speedMultiplier = 1.0) {
         const count = 32;
 
         for (let i = 0; i < count; i++) {
@@ -728,8 +754,7 @@ class ThreeTritrisRenderer {
 
         const ring = new THREE.Mesh(geom, mat);
 
-        ring.position.set(worldX, worldY, 0.25);
-        // ring.rotation.x = Math.PI / 2; 
+        ring.position.set(worldX, worldY, 0.3);
         ring.velocity = new THREE.Vector3(0, 0, 0);
         
         ring.life = 0.5;
@@ -739,44 +764,146 @@ class ThreeTritrisRenderer {
         this.particles.push(ring);
     }
 
-    triggerLightshow() {
-        console.log("Triggering lightshow!");
+    createRainbowShader() {
+        return new THREE.ShaderMaterial({
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            uniforms: {
+                u_time: { value: 0 },
+                u_progress: { value: 0 },   
+                u_opacity: { value: 1.0 },
+                u_width: { value: 0.25 }     
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix *
+                                modelViewMatrix *
+                                vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                varying vec2 vUv;
+                uniform float u_time;
+                uniform float u_progress;
+                uniform float u_width;
+                uniform float u_opacity;
 
-        this.lightshowTime = 1.25;
-        this.lightshowElapsed = 0;
+                vec3 hsl2rgb(vec3 hsl) {
+                    vec3 rgb = clamp(abs(mod(hsl.x * 6.0 + vec3(0, 4, 2), 6.0) - 3.0) - 1.0,
+                                    0.0,
+                                    1.0);
+                    rgb = rgb * rgb * (3.0 - 2.0 * rgb); // smooth
+                    return hsl.z + hsl.y * (rgb - 0.5) * (1.0 - abs(2.0 * hsl.z - 1.0));
+                }
 
-        this.lightshowLights = [];
+                void main() {
 
-        // create point lights in a ring in front of the board
-        for (let i = 0; i < 6; i++) {
-            const hue = Math.random();
-            const col = new THREE.Color().setHSL(hue, 1.0, 0.55);
+                    // distance of pixel from sweep center
+                    float dist = abs(vUv.x - u_progress);
 
-            const light = new THREE.PointLight(col, 1.0, 0, 0); 
-            light.position.set(
-                Math.cos((i / 6) * Math.PI * 2) * 15,
-                Math.sin((i / 6) * Math.PI * 2) * 15,
-                10
-            );
+                    float mask = smoothstep(u_width, 0.0, dist);
 
-            this.scene.add(light);
-            this.lightshowLights.push(light);
-        }
+                    // animated internal shimmer
+                    float hue = mod(vUv.x * 1.5 + u_time * 0.3, 1.0);
 
-        // spawn particles around score UI
-        const baseX = (this.boardWidth / 2 - 12) * this.cellSize;
-        const baseY = (this.boardHeight / 2 - 1) * this.cellSize;   
-        for (let i = 0; i < 12; i++) {
-            const x = baseX + (Math.random() - 0.5) * 4.0;
-            const y = baseY + (Math.random() - 0.5) * 1.5;
-            const hue = Math.random();
-            const col = new THREE.Color().setHSL(hue, 1.0, 0.55);
+                    vec3 color = hsl2rgb(vec3(hue, 1.0, 0.5));
 
-            this.spawnPlacementParticles(x, y, col.getHex(), 2.0);
-        }
-
+                    gl_FragColor = vec4(color, (1.0 - mask) * u_opacity);
+                }
+            `
+        });
     }
 
+
+    triggerLightshow() {
+        console.log("Triggering light show!");
+
+        this.lightshowTime = 0.4;
+        this.lightshowElapsed = 0;
+
+        // Full-board quad
+        const w = this.boardWidth * this.cellSize * 8.2;
+        const h = this.boardHeight * this.cellSize * 2.2;
+
+        const geo = new THREE.PlaneGeometry(w, h);
+        const mat = this.createRainbowShader();
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(0, 0, 6.0);
+
+        this.scene.add(mesh);
+        this.rainbowPlane = mesh;
+    }
+
+    triggerLineClear(rows) {
+        this.lineClearRows = rows.slice();    
+        this.lineClearTime = 0.45; 
+        this.lineClearElapsed = 0;
+        this.lineClearEffects = [];
+
+        for (const r of rows) {
+            // compute world Y
+            const y = (this.boardHeight / 2 - r - 0.5) * this.cellSize;
+
+            // shiny horizontal wipe beam
+            const geo = new THREE.PlaneGeometry(
+                this.boardWidth * this.cellSize * 1.5,
+                this.cellSize * 0.9
+            );
+
+            const mat = new THREE.ShaderMaterial({
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                uniforms: {
+                    u_time: { value: 0 },
+                    u_progress: { value: 0 }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = projectionMatrix *
+                                    modelViewMatrix *
+                                    vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    precision highp float;
+                    varying vec2 vUv;
+                    uniform float u_time;
+                    uniform float u_progress;
+
+                    void main() {
+                        float mask = smoothstep(u_progress, u_progress + 0.15, vUv.x);
+                        float glow = mask * (0.4 + 0.6 * sin(u_time * 40.0));
+                        vec3 c = vec3(0.2, 0.9, 1.0) * glow;
+                        gl_FragColor = vec4(c, glow);
+                    }
+                `
+            });
+
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(-1.5, y, 1.0);
+            this.scene.add(mesh);
+
+            this.lineClearEffects.push(mesh);
+
+            // particles along the cleared line
+            for (let c = 0; c < this.boardWidth; c++) {
+                const x = (c - this.boardWidth / 2 + 0.5) * this.cellSize;
+                this.spawnParticles(x, y, 0x88ccff, 1.2);
+            }
+        }
+    }
+
+
+    startBoardBounce() {
+        this.bounceTime = this.bounceDuration;
+    }
 
 
     render() {
@@ -838,29 +965,78 @@ class ThreeTritrisRenderer {
 
         }
 
-        // lightshow animation
-        if (this.lightshowTime > 0) {
+        // shader rainbow sweep
+        if (this.rainbowPlane && this.lightshowTime > 0) {
+            const mat = this.rainbowPlane.material;
+
             this.lightshowElapsed += dt;
-
             const t = this.lightshowElapsed / this.lightshowTime;
-            const k = 1 - t; //
+            const eased = Math.min(1.0, t);
 
-            // pulsating, rainbow lights
-            for (let i = 0; i < this.lightshowLights.length; i++) {
-                const L = this.lightshowLights[i];
-                L.intensity = 8 * k * (0.7 + Math.random() * 0.3);
+            // update uniforms
+            mat.uniforms.u_time.value += dt;
+            mat.uniforms.u_progress.value = eased;  // sweep left to right
+
+            // fade out at the end
+            if (t > 0.8) {
+                mat.uniforms.u_opacity.value = (1.0 - t) * 5.0;
             }
 
+            // remove plane at end
             if (t >= 1) {
-                for (const L of this.lightshowLights) {
-                    this.scene.remove(L);
-                }
-                this.lightshowLights = [];
+                this.scene.remove(this.rainbowPlane);
+                this.rainbowPlane.geometry.dispose();
+                this.rainbowPlane.material.dispose();
+                this.rainbowPlane = null;
                 this.lightshowTime = 0;
             }
         }
 
+        // 3D line-clear animation
+        if (this.lineClearEffects && this.lineClearEffects.length > 0) {
+            this.lineClearElapsed += dt;
+            const t = this.lineClearElapsed / this.lineClearTime;
 
+            for (const mesh of this.lineClearEffects) {
+                const mat = mesh.material;
+                mat.uniforms.u_time.value += dt;
+                mat.uniforms.u_progress.value = t * 1.2;
+
+                const fade = 1.0 - Math.pow(t, 2.3);
+                mesh.material.opacity = fade;
+            }
+
+            if (t >= 1) {
+                // cleanup
+                for (const mesh of this.lineClearEffects) {
+                    this.scene.remove(mesh);
+                    mesh.geometry.dispose();
+                    mesh.material.dispose();
+                }
+                this.lineClearEffects = [];
+            }
+        }
+
+
+        // board bounce
+        if (this.bounceTime > 0) {
+            this.bounceTime -= dt;
+            const t = 1 - (this.bounceTime / this.bounceDuration);
+
+            const motion = Math.sin(t * Math.PI);
+            // How far the board moves upward
+            const offset = motion * -this.bounceHeight;
+
+            this.boardGroup.position.y = offset;
+            this.gridGroup.position.y = offset;
+            this.activeGroup.position.y = offset;
+
+        } else {
+            // reset
+            this.boardGroup.position.y = 0;
+            this.gridGroup.position.y = 0;
+            this.activeGroup.position.y = 0;
+        }
 
         this.renderer.render(this.scene, this.camera);
     }
