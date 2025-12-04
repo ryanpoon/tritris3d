@@ -20,6 +20,12 @@ function initThreeRenderer() {
 // Called every frame from draw(), after game.update()
 function renderThreeFromGame(game, paused) {
     if (!threeRenderer || !game) return;
+    
+    if (game.tritrisJustHappened) {
+        threeRenderer.triggerLightshow();
+        game.tritrisJustHappened = false;
+    }
+
     threeRenderer.updateFromGame(game, paused);
     threeRenderer.render();
 }
@@ -92,9 +98,12 @@ class ThreeTritrisRenderer {
         this.gridGroup = new THREE.Group();
         this.scene.add(this.gridGroup);
 
+        this.particleGroup = new THREE.Group();
+        this.scene.add(this.particleGroup);
+        this.particles = [];
 
 
-        // Board dimensions (read from Game, but set defaults here)
+        // Board dimensions 
         this.boardWidth = 8;
         this.boardHeight = 16;
         this.cellSize = 1.0;
@@ -113,6 +122,9 @@ class ThreeTritrisRenderer {
         // Geometry cache: key 'row_col' -> BufferGeometry
         this.triGeometryCache = {};
         this.localTriangles = this._buildLocalTriangleDefs();
+
+        // previous locked cells for placement particle effects
+        this.prevLocked = new Set();
 
         //this._addBoardFrame();
 
@@ -355,6 +367,8 @@ class ThreeTritrisRenderer {
 
 
     updateFromGame(game, paused) {
+        const currentLocked = new Set();
+        const newlyLocked = [];
         this.boardWidth = game.w;
         this.boardHeight = game.h;
 
@@ -363,8 +377,8 @@ class ThreeTritrisRenderer {
         this._clearGroup(this.activeGroup);
         this._clearGroup(this.nextPieceGroup);
 
-        //  LOCKED GRID (board) 
-        const grid = game.grid.grid; // [row][col] => GridCell 
+        //  LOCKED GRID 
+        const grid = game.grid.grid;
         for (let row = 0; row < game.h; row++) {
             for (let col = 0; col < game.w; col++) {
                 const cell = grid[row][col];
@@ -375,7 +389,14 @@ class ThreeTritrisRenderer {
                         const tri = cell.tris[subRow][subCol];
                         if (!tri) continue;
 
-                        const colorIndex = tri.clr; // Triangle.clr 
+                        const colorIndex = tri.clr; 
+                        const key = `${row},${col},${subRow},${subCol}`;
+                        currentLocked.add(key);
+
+                        if (!this.prevLocked.has(key)) {
+                            newlyLocked.push({ row, col, subRow, subCol, clr: colorIndex });
+                        }
+
                         this._addTriangleMesh(
                             this.boardGroup,
                             col,
@@ -389,6 +410,19 @@ class ThreeTritrisRenderer {
                 }
             }
         }
+
+        // spawn placement particles and shockwave for newly locked cells
+        for (const cell of newlyLocked) {
+            const worldX = (cell.col - this.boardWidth / 2 + 0.5) * this.cellSize;
+            const worldY = (this.boardHeight / 2 - cell.row - 0.5) * this.cellSize;
+            const colorHex = this.colors[cell.clr];
+
+            this.spawnPlacementParticles(worldX, worldY, colorHex);
+            this.spawnShockwave(worldX, worldY, colorHex);
+        }
+
+        this.prevLocked = currentLocked
+
 
         //  ACTIVE FALLING PIECE 
         if (!paused && game.currentPiece) {
@@ -636,6 +670,114 @@ class ThreeTritrisRenderer {
         this.stars = stars;
     };
 
+    spawnPlacementParticles(worldX, worldY, colorHex, speedMultiplier = 1.0) {
+        const count = 32;
+
+        for (let i = 0; i < count; i++) {
+
+            // A spark is a thin quad
+            const geom = new THREE.PlaneGeometry(
+                0.10 + Math.random() * 0.15,  // length
+                0.02                          // thickness
+            );
+
+            const mat = new THREE.MeshBasicMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.AdditiveBlending, 
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+
+            const spark = new THREE.Mesh(geom, mat);
+
+            spark.position.set(worldX, worldY, 0.4);
+
+            // random rotation so streaks point randomly
+            spark.rotation.z = Math.random() * Math.PI * 2;
+
+            // fast velocity
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2.5 + Math.random() * 2.0 * speedMultiplier;
+            spark.velocity = new THREE.Vector3(
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                Math.random() * 1.2
+            );
+
+            // lifetime
+            spark.life = 0.4 + Math.random() * 0.3;
+            spark.startLife = spark.life;
+
+            this.particleGroup.add(spark);
+            this.particles.push(spark);
+        }
+    }
+
+    spawnShockwave(worldX, worldY, colorHex) {
+        const geom = new THREE.RingGeometry(0.01, 0.12, 64);
+        const mat = new THREE.MeshBasicMaterial({
+            color: colorHex,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        const ring = new THREE.Mesh(geom, mat);
+
+        ring.position.set(worldX, worldY, 0.25);
+        // ring.rotation.x = Math.PI / 2; 
+        ring.velocity = new THREE.Vector3(0, 0, 0);
+        
+        ring.life = 0.5;
+        ring.startLife = 0.5;
+
+        this.particleGroup.add(ring);
+        this.particles.push(ring);
+    }
+
+    triggerLightshow() {
+        console.log("Triggering lightshow!");
+
+        this.lightshowTime = 1.25;
+        this.lightshowElapsed = 0;
+
+        this.lightshowLights = [];
+
+        // create point lights in a ring in front of the board
+        for (let i = 0; i < 6; i++) {
+            const hue = Math.random();
+            const col = new THREE.Color().setHSL(hue, 1.0, 0.55);
+
+            const light = new THREE.PointLight(col, 1.0, 0, 0); 
+            light.position.set(
+                Math.cos((i / 6) * Math.PI * 2) * 15,
+                Math.sin((i / 6) * Math.PI * 2) * 15,
+                10
+            );
+
+            this.scene.add(light);
+            this.lightshowLights.push(light);
+        }
+
+        // spawn particles around score UI
+        const baseX = (this.boardWidth / 2 - 12) * this.cellSize;
+        const baseY = (this.boardHeight / 2 - 1) * this.cellSize;   
+        for (let i = 0; i < 12; i++) {
+            const x = baseX + (Math.random() - 0.5) * 4.0;
+            const y = baseY + (Math.random() - 0.5) * 1.5;
+            const hue = Math.random();
+            const col = new THREE.Color().setHSL(hue, 1.0, 0.55);
+
+            this.spawnPlacementParticles(x, y, col.getHex(), 2.0);
+        }
+
+    }
+
+
 
     render() {
         // star animation
@@ -653,13 +795,71 @@ class ThreeTritrisRenderer {
         // next piece rotation and glow modulation
         if (this.nextPiecePivot) {
             // console.log('rotating next piece');
-            this.nextPiecePivot.rotation.y = t * 1.1;
+            this.nextPiecePivot.rotation.y = t * 3.1;
 
             if (this.nextPieceGlow && this.nextPieceGlow.material) {
                 this.nextPieceGlow.material.opacity =
                     0.20 + 0.08 * (1 + Math.sin(t * 3.0)) * 0.5;
             }
         }
+
+        // particle animation
+        const dt = 0.016;
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.life -= dt;
+
+            if (p.life <= 0) {
+                this.particleGroup.remove(p);
+                p.geometry.dispose();
+                p.material.dispose();
+                this.particles.splice(i, 1);
+                continue;
+            }
+
+            // movement
+            p.position.addScaledVector(p.velocity, dt);
+            p.velocity.multiplyScalar(0.96);
+            // slight upward drift
+            p.velocity.z += 0.4 * dt;
+            
+            // expand shockwave ring
+            if (p.geometry.type === "RingGeometry") {
+                const s = 1 + (1 - p.life / p.startLife) * 6.0; 
+                p.scale.set(s, s, s);
+            }
+            // flicker
+            if (p.geometry.type === "RingGeometry") {
+                p.material.opacity = p.life / p.startLife;
+            } else {
+                p.material.opacity = (p.life / p.startLife) * (0.6 + Math.random() * 0.4);
+            }
+
+        }
+
+        // lightshow animation
+        if (this.lightshowTime > 0) {
+            this.lightshowElapsed += dt;
+
+            const t = this.lightshowElapsed / this.lightshowTime;
+            const k = 1 - t; //
+
+            // pulsating, rainbow lights
+            for (let i = 0; i < this.lightshowLights.length; i++) {
+                const L = this.lightshowLights[i];
+                L.intensity = 8 * k * (0.7 + Math.random() * 0.3);
+            }
+
+            if (t >= 1) {
+                for (const L of this.lightshowLights) {
+                    this.scene.remove(L);
+                }
+                this.lightshowLights = [];
+                this.lightshowTime = 0;
+            }
+        }
+
 
 
         this.renderer.render(this.scene, this.camera);

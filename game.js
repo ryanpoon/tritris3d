@@ -6,6 +6,7 @@ class Game {
 
         this.tritrisAmt = 0; //For statistics
         this.totalTime = 0;
+        this.tritrisJustHappened = true;
 
         this.history = [];
         this.currentSnapshot = new Snapshot(this.totalTime);
@@ -350,6 +351,7 @@ class Game {
                 //Tritris!
                 this.flashTime = Date.now() + this.maxFlashTime;
                 this.playTritrisSound = true;
+                this.tritrisJustHappened = true;
             } else {
                 this.playClearSound = true;
             }
