@@ -250,37 +250,49 @@ class ThreeTritrisRenderer {
     }
 
     _makeTextSprite(text, options = {}) {
-        const fontFace = options.fontFace || 'Arial';
-        const fontSize = options.fontSize || 64;
+        const fontFace = options.fontFace || 'Orbitron';  
+        const fontSize = options.fontSize || 72;
         const textColor = options.textColor || '#ffffff';
-        const bgColor = options.bgColor || 'rgba(0, 0, 0, 0.4)';
-        const scale = options.scale || 0.02;
+        const outlineColor = options.outlineColor || '#00aaff';
+        const glowColor = options.glowColor || outlineColor;
+        const scale = options.scale || 0.018;
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
         ctx.font = `${fontSize}px ${fontFace}`;
         const metrics = ctx.measureText(text);
-        const padding = 20;
+        const padding = 40;
 
         canvas.width = metrics.width + padding * 2;
         canvas.height = fontSize + padding * 2;
 
         ctx.font = `${fontSize}px ${fontFace}`;
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = textColor;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
+
+        // glow
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = fontSize * 0.35;
+
+        // outline
+        ctx.lineWidth = fontSize * 0.12;
+        ctx.strokeStyle = outlineColor;
+        ctx.strokeText(text, padding, canvas.height / 2);
+
+        // fill
+        ctx.fillStyle = textColor;
         ctx.fillText(text, padding, canvas.height / 2);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.needsUpdate = true;
-
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        
         const material = new THREE.SpriteMaterial({
-            map: texture,
-            transparent: true
+            map: tex,
+            transparent: true,
+            depthTest: false
         });
 
         const sprite = new THREE.Sprite(material);
@@ -288,6 +300,7 @@ class ThreeTritrisRenderer {
 
         return sprite;
     }
+
 
 
     _updateUI(game, paused) {
@@ -328,7 +341,6 @@ class ThreeTritrisRenderer {
         levelSprite.position.set(baseX, baseY - this.cellSize * 3.0, z);
 
         this.uiGroup.add(scoreSprite, linesSprite, levelSprite);
-
         
         if (paused) {
             const pausedSprite = this._makeTextSprite('PAUSED', {
@@ -597,6 +609,19 @@ class ThreeTritrisRenderer {
         }
     }
 
+    _makePanel(width, height) {
+        const geo = new THREE.PlaneGeometry(width, height);
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0x0a1120,
+            opacity: 0.45,
+            transparent: true
+        });
+
+        const panel = new THREE.Mesh(geo, mat);
+        panel.material.color.setHSL(0.55, 0.7, 0.5);
+        return panel;
+    }
+
 
     _createStarfield() {
         const starCount = 2000;
@@ -648,6 +673,8 @@ class ThreeTritrisRenderer {
                     0.20 + 0.08 * (1 + Math.sin(t * 3.0)) * 0.5;
             }
         }
+
+
         this.renderer.render(this.scene, this.camera);
     }
 }
