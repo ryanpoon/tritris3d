@@ -18,6 +18,16 @@ function setup() {
 
     createCanvas(windowWidth, windowHeight);
 
+    // hide old p5 canvas
+    const p5canvas = document.querySelector('canvas');
+    if (p5canvas) {
+        p5canvas.style.position = 'absolute';
+        p5canvas.style.top = '0';
+        p5canvas.style.left = '0';
+        p5canvas.style.pointerEvents = 'none';
+        p5canvas.style.opacity = '0';   // fully transparent
+    }
+
     dom.recordsDiv = select('#records');
     dom.recordsDiv.style('visibility: visible');
     setHighScores(0, 0, true); //Sets some default scores
@@ -118,11 +128,7 @@ function draw() {
 
     if (gameState == gameStates.INGAME) {
         game.update();
-
         renderThreeFromGame(game, false);
-
-        // Optionally still draw 2D HUD / UI
-        showGame(false);
 
         if (!game.alive) {
             if (!game.practice)
@@ -131,19 +137,10 @@ function draw() {
             dom.playDiv.show();
         }
     } else if (gameState == gameStates.PAUSED) {
-        // 3D board in frozen state
-        if (game) {
-            renderThreeFromGame(game, true);
-        }
-
-        showGame(true); // existing paused overlay / HUD
-        fill(255);
-        stroke(0);
-        textSize(30);
-        textAlign(CENTER, CENTER);
-        text('PAUSED', width/2, height/3);
+        renderThreeFromGame(game, true);
     }
 }
+
 
 
 

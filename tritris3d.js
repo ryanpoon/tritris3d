@@ -43,7 +43,6 @@ class ThreeTritrisRenderer {
         this.renderer.setPixelRatio(window.devicePixelRatio || 1);
         this.renderer.setSize(window.innerWidth, window.innerHeight);
 
-        // Put the WebGL canvas behind UI / DOM, but above page background.
         this.renderer.domElement.style.position = 'fixed';
         this.renderer.domElement.style.left = '0';
         this.renderer.domElement.style.top = '0';
@@ -54,19 +53,26 @@ class ThreeTritrisRenderer {
         document.body.appendChild(this.renderer.domElement);
 
         //  LIGHTS 
-        const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
         this.scene.add(ambient);
 
-        const keyLight = new THREE.PointLight(0xffffff, 1.2, 200);
-        keyLight.position.set(30, 40, 60);
-        this.scene.add(keyLight);
+        const key = new THREE.PointLight(0x88aaff, 2, 200);
+        key.position.set(20, 30, 40);
+        this.scene.add(key);
 
-        const rimLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        rimLight.position.set(-20, 40, -10);
-        this.scene.add(rimLight);
+        const rim = new THREE.PointLight(0xff66cc, 1.2, 200);
+        rim.position.set(-25, -20, 30);
+        this.scene.add(rim);
+
+        // materials
+        this.gridMaterial = new THREE.LineBasicMaterial({
+            color: 0x44aaff,
+            transparent: true,
+            opacity: 0.35,
+        });
 
 
-        //  GROUPS FOR BOARD + ACTIVE PIECE + NEXT PIECE
+        //  groups for different sets of meshes 
         this.boardGroup = new THREE.Group();
         this.boardGroup.name = 'BoardGroup3D';
         this.scene.add(this.boardGroup);
@@ -78,6 +84,13 @@ class ThreeTritrisRenderer {
         this.nextPieceGroup = new THREE.Group();
         this.nextPieceGroup.name = 'NextPiece3D';
         this.scene.add(this.nextPieceGroup);
+
+        this.uiGroup = new THREE.Group();
+        this.scene.add(this.uiGroup);
+
+        this.gridGroup = new THREE.Group();
+        this.scene.add(this.gridGroup);
+
 
 
         // Board dimensions (read from Game, but set defaults here)
@@ -104,6 +117,7 @@ class ThreeTritrisRenderer {
 
         window.addEventListener('resize', () => this._onResize());
         this._onResize();
+        this._createStarfield();
 
         
     }
@@ -234,6 +248,100 @@ class ThreeTritrisRenderer {
         }
     }
 
+    _makeTextSprite(text, options = {}) {
+        const fontFace = options.fontFace || 'Arial';
+        const fontSize = options.fontSize || 64;
+        const textColor = options.textColor || '#ffffff';
+        const bgColor = options.bgColor || 'rgba(0, 0, 0, 0.4)';
+        const scale = options.scale || 0.02;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        ctx.font = `${fontSize}px ${fontFace}`;
+        const metrics = ctx.measureText(text);
+        const padding = 20;
+
+        canvas.width = metrics.width + padding * 2;
+        canvas.height = fontSize + padding * 2;
+
+        ctx.font = `${fontSize}px ${fontFace}`;
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = textColor;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, padding, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+
+        const material = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true
+        });
+
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(canvas.width * scale, canvas.height * scale, 1);
+
+        return sprite;
+    }
+
+
+    _updateUI(game, paused) {
+        // Clear previous UI
+        while (this.uiGroup.children.length > 0) {
+            const c = this.uiGroup.children.pop();
+            if (c.material && c.material.map) c.material.map.dispose();
+            if (c.material) c.material.dispose();
+        }
+
+        if (!game) return;
+
+        // Score / lines / level text
+        const scoreText = `Score ${game.score}`;
+        const linesText = `Lines ${game.lines}`;
+        const levelText = `Level ${game.level}`;
+
+        const scoreSprite = this._makeTextSprite(scoreText, {
+            fontSize: 72,
+            scale: 0.015
+        });
+        const linesSprite = this._makeTextSprite(linesText, {
+            fontSize: 56,
+            scale: 0.015
+        });
+        const levelSprite = this._makeTextSprite(levelText, {
+            fontSize: 56,
+            scale: 0.015
+        });
+
+        // Position the UI to the right of the board in world space
+        const baseX = (this.boardWidth / 2 - 12) * this.cellSize;
+        const baseY = (this.boardHeight / 2 - 1) * this.cellSize;
+        const z = 0.6;
+
+        scoreSprite.position.set(baseX, baseY, z);
+        linesSprite.position.set(baseX, baseY - this.cellSize * 1.5, z);
+        levelSprite.position.set(baseX, baseY - this.cellSize * 3.0, z);
+
+        this.uiGroup.add(scoreSprite, linesSprite, levelSprite);
+
+        
+        if (paused) {
+            const pausedSprite = this._makeTextSprite('PAUSED', {
+                fontSize: 96,
+                textColor: '#ffcc00',
+                bgColor: 'rgba(0,0,0,0.7)',
+                scale: 0.02
+            });
+            pausedSprite.position.set(0, 0, 1.0);
+            this.uiGroup.add(pausedSprite);
+        }
+    }
+
+
     updateFromGame(game, paused) {
         this.boardWidth = game.w;
         this.boardHeight = game.h;
@@ -301,54 +409,86 @@ class ThreeTritrisRenderer {
             }
         }
         this._updateNextPiece(game);
-
+        this._updateUI(game, paused);
+        this._createGridLines();
     }
 
     _updateNextPiece(game) {
         const np = game.nextPiece;
         if (!np) return;
 
+        // Clear previous preview
+        while (this.nextPieceGroup.children.length > 0) {
+            const m = this.nextPieceGroup.children.pop();
+            if (m.material?.map) m.material.map.dispose();
+            if (m.material) m.material.dispose();
+        }
+
         const rows = np.grid.length;
         const cols = np.grid[0].length;
 
-        // Where to place the center of the next-piece preview in world coordinates:
-        // Board x range is roughly [-4, +4]; put preview to the right of that.
-        const previewCenterX = (this.boardWidth / 2 + 2.5) * this.cellSize; // ~6.5
-        const previewCenterY = (this.boardHeight / 2 - 3) * this.cellSize;  // a bit below the top
+        // compute bounding box of actual triangles 
+        let minR = Infinity, maxR = -Infinity;
+        let minC = Infinity, maxC = -Infinity;
 
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                const cell = np.grid[row][col];
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const cell = np.grid[r][c];
                 if (!cell || !cell.tris) continue;
 
-                for (let subRow = 0; subRow < 2; subRow++) {
-                    for (let subCol = 0; subCol < 2; subCol++) {
-                        const tri = cell.tris[subRow][subCol];
+                let has = false;
+                for (let sr = 0; sr < 2; sr++) {
+                    for (let sc = 0; sc < 2; sc++) {
+                        if (cell.tris[sr][sc]) has = true;
+                    }
+                }
+                if (!has) continue;
+
+                minR = Math.min(minR, r);
+                maxR = Math.max(maxR, r);
+                minC = Math.min(minC, c);
+                maxC = Math.max(maxC, c);
+            }
+        }
+
+        const pieceW = maxC - minC + 1;
+        const pieceH = maxR - minR + 1;
+
+        // center of preview area in world coords 
+        const previewCenterX = (this.boardWidth / 2 + 3) * this.cellSize;
+        const previewCenterY = (this.boardHeight / 2 - 2) * this.cellSize;
+
+        // render triangles using bounding box-based centering 
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const cell = np.grid[r][c];
+                if (!cell || !cell.tris) continue;
+
+                for (let sr = 0; sr < 2; sr++) {
+                    for (let sc = 0; sc < 2; sc++) {
+                        const tri = cell.tris[sr][sc];
                         if (!tri) continue;
 
-                        const geom = this._getTriangleGeometry(subRow, subCol);
-                        if (!geom) continue;
-
-                        const colorHex = this.colors[tri.clr] || 0xffffff;
-                        const mat = new THREE.MeshPhongMaterial({
-                            color: colorHex,
-                            shininess: 80,
+                        const geom = this._getTriangleGeometry(sr, sc);
+                        const color = this.colors[tri.clr];
+                        const mat = new THREE.MeshStandardMaterial({
+                            color,
+                            emissive: color,
+                            emissiveIntensity: 1.4,
+                            metalness: 0.0,
+                            roughness: 0.25,
                             side: THREE.DoubleSide
                         });
 
                         const mesh = new THREE.Mesh(geom, mat);
 
-                        // Center the piece within a 3x3 mini-grid, similar to Piece.showAt. 
-                        const dim = 3;
-                        const scale = this.cellSize * 0.8; // slightly smaller so it fits nicely
-
-                        const localX = (col - cols / 2 + 0.5) * scale * (dim / 3);
-                        const localY = -(row - rows / 2 + 0.5) * scale * (dim / 3);
+                        const cx = (c - minC - pieceW / 2 + 0.5) * this.cellSize;
+                        const cy = -(r - minR - pieceH / 2 + 0.5) * this.cellSize;
 
                         mesh.position.set(
-                            previewCenterX + localX,
-                            previewCenterY + localY,
-                            0.3  // a bit in front
+                            previewCenterX + cx,
+                            previewCenterY + cy,
+                            0.25
                         );
 
                         this.nextPieceGroup.add(mesh);
@@ -357,6 +497,8 @@ class ThreeTritrisRenderer {
             }
         }
     }
+    
+
 
 
     _addTriangleMesh(group, gridCol, gridRow, subRow, subCol, colorIndex, isActive) {
@@ -364,10 +506,13 @@ class ThreeTritrisRenderer {
         if (!geom) return;
 
         const colorHex = this.colors[colorIndex] || 0xffffff;
-        const mat = new THREE.MeshPhongMaterial({
-            color: colorHex,
-            shininess: isActive ? 70 : 20,
-            side: THREE.DoubleSide // visible from both sides
+        const mat = new THREE.MeshStandardMaterial({
+            colorHex,
+            emissive: colorHex,
+            emissiveIntensity: 0.7,
+            metalness: 0.0,
+            roughness: 0.25,
+            side: THREE.DoubleSide
         });
 
         const mesh = new THREE.Mesh(geom, mat);
@@ -382,8 +527,80 @@ class ThreeTritrisRenderer {
 
         group.add(mesh);
     }
+    _createGridLines() {
+        // clear old lines
+        while (this.gridGroup.children.length > 0) {
+            const c = this.gridGroup.children.pop();
+            if (c.material) c.material.dispose();
+            if (c.geometry) c.geometry.dispose();
+        }
+
+        const w = this.boardWidth;
+        const h = this.boardHeight;
+        const s = this.cellSize;
+
+        // horizontal lines
+        for (let r = 0; r <= h; r++) {
+            const y = (h/2 - r) * s;
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-(w/2)*s, y, -0.1),
+                new THREE.Vector3((w/2)*s,  y, -0.1)
+            ]);
+
+            const line = new THREE.Line(geometry, this.gridMaterial);
+            this.gridGroup.add(line);
+        }
+
+        // vertical lines
+        for (let c = 0; c <= w; c++) {
+            const x = (c - w/2) * s;
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x,  (h/2)*s, -0.1),
+                new THREE.Vector3(x, -(h/2)*s, -0.1)
+            ]);
+
+            const line = new THREE.Line(geometry, this.gridMaterial);
+            this.gridGroup.add(line);
+        }
+    }
+
+
+    _createStarfield = function() {
+        const starCount = 2000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(starCount * 3);
+
+        for (let i = 0; i < starCount; i++) {
+            positions[i * 3 + 0] = (Math.random() - 0.5) * 200;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 200;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+        }
+
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.6,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const stars = new THREE.Points(geometry, material);
+        this.scene.add(stars);
+
+        this.stars = stars;
+    };
+
 
     render() {
         this.renderer.render(this.scene, this.camera);
+        this.stars.rotation.y += 0.0004;
+        this.stars.rotation.x += 0.0001;
+        const t = performance.now() * 0.001;
+        this.gridMaterial.opacity = 0.25 + Math.sin(t * 2.0) * 0.10;
+
+        const hue = (0.55 + 0.05 * Math.sin(t * 0.7)) % 1;
+        this.gridMaterial.color.setHSL(hue, 0.8, 0.55);
+
     }
 }
