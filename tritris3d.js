@@ -34,7 +34,7 @@ class ThreeTritrisRenderer {
 
         // Board centered around (0,0,0) in XY plane, camera in +Z looking toward origin.
         // Put the camera up/right and forward a bit, looking toward center.
-        this.camera.position.set(0, 12, 32);   // centered left/right, above the board, forward
+        this.camera.position.set(0, 0, 32);   // centered left/right, above the board, forward
         this.camera.lookAt(0, 0, 0);           // look at middle of board
         this.camera.up.set(0, 1, 0);     
 
@@ -54,11 +54,11 @@ class ThreeTritrisRenderer {
 
         document.body.appendChild(this.renderer.domElement);
 
-        //  LIGHTS 
+        //  lights 
         const ambient = new THREE.AmbientLight(0xffffff, 0.4);
         this.scene.add(ambient);
 
-        const key = new THREE.PointLight(0x88aaff, 2, 200);
+        const key = new THREE.PointLight(0x88aaff, 5, 200);
         key.position.set(20, 30, 40);
         this.scene.add(key);
 
@@ -72,7 +72,6 @@ class ThreeTritrisRenderer {
             transparent: true,
             opacity: 0.35,
         });
-
 
         //  groups for different sets of meshes 
         this.boardGroup = new THREE.Group();
@@ -115,7 +114,7 @@ class ThreeTritrisRenderer {
         this.triGeometryCache = {};
         this.localTriangles = this._buildLocalTriangleDefs();
 
-        this._addBoardFrame();
+        //this._addBoardFrame();
 
         window.addEventListener('resize', () => this._onResize());
         this._onResize();
@@ -132,6 +131,7 @@ class ThreeTritrisRenderer {
         this.renderer.setSize(w, h);
     }
 
+    // messed with adding a board frame, but decided against it for now
     _addBoardFrame() {
         const w = this.boardWidth * this.cellSize;
         const h = this.boardHeight * this.cellSize;
@@ -144,7 +144,6 @@ class ThreeTritrisRenderer {
         });
 
         const frame = new THREE.Mesh(geometry, material);
-        // Plane in XY, facing +Z (default orientation)
         frame.position.set(0, 0, -0.1); // slightly behind triangles
         this.scene.add(frame);
     }
@@ -184,7 +183,7 @@ class ThreeTritrisRenderer {
         const C = new THREE.Vector3(verts[2].x, verts[2].y, 0);
 
         // Extrude into a triangular prism 
-        const depth = 0.85;           // thickness of pieces
+        const depth = 1.10;           // thickness of pieces
         const half = depth / 2;
 
         // Front face Z
@@ -538,7 +537,7 @@ class ThreeTritrisRenderer {
         const colorHex = this.colors[colorIndex] || 0xffffff;
         
         let mat;
-        // make active piece glow brightly, locked pieces darker
+        // make active piece glow brightly, locked pieces darker and transparent
         if (isActive) {
             mat = new THREE.MeshStandardMaterial({
                 color: colorHex,
@@ -551,10 +550,12 @@ class ThreeTritrisRenderer {
         } else {
             mat = new THREE.MeshStandardMaterial({
                 color: colorHex,
-                emissive: colorHex,       
-                emissiveIntensity: 0.3,
-                metalness: 0.05,
-                roughness: 0.8,           
+                emissive: colorHex,
+                emissiveIntensity: 0.65,
+                metalness: 0.15,
+                roughness: 0.45,    
+                transparent: true,
+                opacity: 0.55,
                 side: THREE.DoubleSide
             });
         }
@@ -583,7 +584,7 @@ class ThreeTritrisRenderer {
         const w = this.boardWidth;
         const h = this.boardHeight;
         const s = this.cellSize;
-        const z = -0.1;
+        const z = -0;
 
         // horizontal lines
         for (let r = 0; r <= h; r++) {
@@ -608,20 +609,6 @@ class ThreeTritrisRenderer {
             this.gridGroup.add(line);
         }
     }
-
-    _makePanel(width, height) {
-        const geo = new THREE.PlaneGeometry(width, height);
-        const mat = new THREE.MeshBasicMaterial({
-            color: 0x0a1120,
-            opacity: 0.45,
-            transparent: true
-        });
-
-        const panel = new THREE.Mesh(geo, mat);
-        panel.material.color.setHSL(0.55, 0.7, 0.5);
-        return panel;
-    }
-
 
     _createStarfield() {
         const starCount = 2000;
