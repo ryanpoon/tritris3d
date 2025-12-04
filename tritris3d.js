@@ -1,4 +1,6 @@
 // tritris3d.js
+// Ryan Poon (rpoon01)
+// CS 175 - Final Project
 // Standalone Three.js renderer for Tritris.
 // Uses the existing game/grid/piece data and renders every triangle as a 3D-lit flat tri.
 
@@ -32,7 +34,7 @@ class ThreeTritrisRenderer {
 
         // Board centered around (0,0,0) in XY plane, camera in +Z looking toward origin.
         // Put the camera up/right and forward a bit, looking toward center.
-        this.camera.position.set(0, 14, 32);   // centered left/right, above the board, forward
+        this.camera.position.set(0, 12, 32);   // centered left/right, above the board, forward
         this.camera.lookAt(0, 0, 0);           // look at middle of board
         this.camera.up.set(0, 1, 0);     
 
@@ -183,7 +185,7 @@ class ThreeTritrisRenderer {
         const C = new THREE.Vector3(verts[2].x, verts[2].y, 0);
 
         // Extrude into a triangular prism 
-        const depth = 0.25;           // thickness of pieces
+        const depth = 0.85;           // thickness of pieces
         const half = depth / 2;
 
         // Front face Z
@@ -417,17 +419,10 @@ class ThreeTritrisRenderer {
         const np = game.nextPiece;
         if (!np) return;
 
-        // Clear previous preview
-        while (this.nextPieceGroup.children.length > 0) {
-            const m = this.nextPieceGroup.children.pop();
-            if (m.material?.map) m.material.map.dispose();
-            if (m.material) m.material.dispose();
-        }
-
         const rows = np.grid.length;
         const cols = np.grid[0].length;
 
-        // compute bounding box of actual triangles 
+        // compute bounding box of used cells ---
         let minR = Infinity, maxR = -Infinity;
         let minC = Infinity, maxC = -Infinity;
 
@@ -451,14 +446,39 @@ class ThreeTritrisRenderer {
             }
         }
 
+        if (!isFinite(minR)) return; // empty piece, bail
+
         const pieceW = maxC - minC + 1;
         const pieceH = maxR - minR + 1;
 
-        // center of preview area in world coords 
+        // where the preview should appear in world space
         const previewCenterX = (this.boardWidth / 2 + 3) * this.cellSize;
         const previewCenterY = (this.boardHeight / 2 - 2) * this.cellSize;
 
-        // render triangles using bounding box-based centering 
+        // create a fresh pivot group for this frame 
+        const pivot = new THREE.Group();
+        this.nextPieceGroup.add(pivot);
+        this.nextPiecePivot = pivot;   // remember for rotation in render()
+
+        // glowing box around the piece 
+        const glowSizeX = 1.5 * this.cellSize + 1.0;
+        const glowSizeY = 1.5 * this.cellSize + 1.0;
+        const glowSizeZ = 2.5;
+
+        const glowGeo = new THREE.BoxGeometry(glowSizeX, glowSizeY, glowSizeZ);
+        const glowMat = new THREE.MeshBasicMaterial({
+            color: 0x88ccff,
+            transparent: true,
+            opacity: 0.25
+        });
+
+        const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+        this.nextPieceGroup.add(glowMesh);
+        this.nextPieceGlow = glowMesh;
+        glowMesh.position.set(previewCenterX, previewCenterY, 0.3);
+
+
+        // add all triangles as children of the pivot 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 const cell = np.grid[r][c];
@@ -471,33 +491,32 @@ class ThreeTritrisRenderer {
 
                         const geom = this._getTriangleGeometry(sr, sc);
                         const color = this.colors[tri.clr];
+
                         const mat = new THREE.MeshStandardMaterial({
                             color,
                             emissive: color,
                             emissiveIntensity: 1.4,
-                            metalness: 0.0,
+                            metalness: 0.3,
                             roughness: 0.25,
                             side: THREE.DoubleSide
                         });
 
                         const mesh = new THREE.Mesh(geom, mat);
 
+                        // local offset relative to pivot center
                         const cx = (c - minC - pieceW / 2 + 0.5) * this.cellSize;
                         const cy = -(r - minR - pieceH / 2 + 0.5) * this.cellSize;
 
-                        mesh.position.set(
-                            previewCenterX + cx,
-                            previewCenterY + cy,
-                            0.25
-                        );
-
-                        this.nextPieceGroup.add(mesh);
+                        mesh.position.set(cx, cy, 0.25);
+                        pivot.add(mesh);
                     }
                 }
             }
         }
+
+        // place the whole pivot in world space
+        pivot.position.set(previewCenterX, previewCenterY, 0.5);
     }
-    
 
 
 
@@ -507,10 +526,10 @@ class ThreeTritrisRenderer {
 
         const colorHex = this.colors[colorIndex] || 0xffffff;
         const mat = new THREE.MeshStandardMaterial({
-            colorHex,
+            color: colorHex,
             emissive: colorHex,
             emissiveIntensity: 0.7,
-            metalness: 0.0,
+            metalness: 0.3,
             roughness: 0.25,
             side: THREE.DoubleSide
         });
@@ -538,15 +557,15 @@ class ThreeTritrisRenderer {
         const w = this.boardWidth;
         const h = this.boardHeight;
         const s = this.cellSize;
+        const z = -0.1;
 
         // horizontal lines
         for (let r = 0; r <= h; r++) {
             const y = (h/2 - r) * s;
             const geometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(-(w/2)*s, y, -0.1),
-                new THREE.Vector3((w/2)*s,  y, -0.1)
+                new THREE.Vector3(-(w/2)*s, y, z),
+                new THREE.Vector3((w/2)*s,  y, z)
             ]);
-
             const line = new THREE.Line(geometry, this.gridMaterial);
             this.gridGroup.add(line);
         }
@@ -555,8 +574,8 @@ class ThreeTritrisRenderer {
         for (let c = 0; c <= w; c++) {
             const x = (c - w/2) * s;
             const geometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(x,  (h/2)*s, -0.1),
-                new THREE.Vector3(x, -(h/2)*s, -0.1)
+                new THREE.Vector3(x,  (h/2)*s, z),
+                new THREE.Vector3(x, -(h/2)*s, z)
             ]);
 
             const line = new THREE.Line(geometry, this.gridMaterial);
@@ -565,7 +584,7 @@ class ThreeTritrisRenderer {
     }
 
 
-    _createStarfield = function() {
+    _createStarfield() {
         const starCount = 2000;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(starCount * 3);
@@ -593,14 +612,28 @@ class ThreeTritrisRenderer {
 
 
     render() {
-        this.renderer.render(this.scene, this.camera);
+        // star animation
         this.stars.rotation.y += 0.0004;
         this.stars.rotation.x += 0.0001;
-        const t = performance.now() * 0.001;
-        this.gridMaterial.opacity = 0.25 + Math.sin(t * 2.0) * 0.10;
 
+        // grid opacity modulation
+        const t = performance.now() * 0.001;
+        this.gridMaterial.opacity = 0.45 + Math.sin(t * 2.0) * 0.10;
+
+        // grid color modulation
         const hue = (0.55 + 0.05 * Math.sin(t * 0.7)) % 1;
         this.gridMaterial.color.setHSL(hue, 0.8, 0.55);
 
+        // next piece rotation and glow modulation
+        if (this.nextPiecePivot) {
+            // console.log('rotating next piece');
+            this.nextPiecePivot.rotation.y = t * 1.1;
+
+            if (this.nextPieceGlow && this.nextPieceGlow.material) {
+                this.nextPieceGlow.material.opacity =
+                    0.20 + 0.08 * (1 + Math.sin(t * 3.0)) * 0.5;
+            }
+        }
+        this.renderer.render(this.scene, this.camera);
     }
 }
