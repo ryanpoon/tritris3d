@@ -16,7 +16,7 @@ let settingControl = null;
 function setup() {
     loadData(''); //Load from top level dir
 
-    createCanvas(windowWidth, windowHeight);
+    createCanvas(windowWidth, windowHeight, { willReadFrequently: true });
 
     // hide old p5 canvas
     const p5canvas = document.querySelector('canvas');

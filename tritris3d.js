@@ -149,9 +149,9 @@ class ThreeTritrisRenderer {
         this.scene.add(frame);
     }
 
-    // Define triangle corners local to the center of a cell.
-    // Cell center is (0,0); each cell is cellSize x cellSize.
-    // We mirror the four sub-triangles used in Triangle.show. 
+    // define triangle corners local to the center of a cell.
+    // cell center is (0,0); each cell is cellSize x cellSize.
+    // mirror the four sub-triangles used in Triangle.show. 
     _buildLocalTriangleDefs() {
         const s = this.cellSize;
         const h = s / 2;
@@ -161,7 +161,6 @@ class ThreeTritrisRenderer {
         const BL = { x: -h, y: -h };
         const BR = { x:  h,  y: -h };
 
-        // IMPORTANT: each triangle is consistently wound counter-clockwise  
         return {
             "0_0": [ TL, TR, BL ],   // top-left
             "0_1": [ TR, BR, TL ],   // top-right
@@ -422,7 +421,7 @@ class ThreeTritrisRenderer {
         const rows = np.grid.length;
         const cols = np.grid[0].length;
 
-        // compute bounding box of used cells ---
+        // compute bounding box of used cells for centering
         let minR = Infinity, maxR = -Infinity;
         let minC = Infinity, maxC = -Infinity;
 
@@ -525,14 +524,29 @@ class ThreeTritrisRenderer {
         if (!geom) return;
 
         const colorHex = this.colors[colorIndex] || 0xffffff;
-        const mat = new THREE.MeshStandardMaterial({
-            color: colorHex,
-            emissive: colorHex,
-            emissiveIntensity: 0.7,
-            metalness: 0.3,
-            roughness: 0.25,
-            side: THREE.DoubleSide
-        });
+        
+        let mat;
+        // make active piece glow brightly, locked pieces darker
+        if (isActive) {
+            mat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                emissive: colorHex,
+                emissiveIntensity: 1.6,   
+                metalness: 0.2,
+                roughness: 0.2,
+                side: THREE.DoubleSide
+            });
+        } else {
+            mat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                emissive: colorHex,       
+                emissiveIntensity: 0.3,
+                metalness: 0.05,
+                roughness: 0.8,           
+                side: THREE.DoubleSide
+            });
+        }
+
 
         const mesh = new THREE.Mesh(geom, mat);
 
