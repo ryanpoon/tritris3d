@@ -110,6 +110,18 @@ class ThreeTritrisRenderer {
         });
         this.gridMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
+        // dead material for game over effect
+        this.deadMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffffff,  
+            emissive: 0x88ffff, 
+            emissiveIntensity: 4.0,
+            metalness: 0.9, 
+            roughness: 0.1,        
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+
         // particle geometries
         this.particleGeo = new THREE.TetrahedronGeometry(0.15, 0);
         this.shockwaveGeo = new THREE.RingGeometry(0.01, 0.12, 32);
@@ -606,6 +618,25 @@ class ThreeTritrisRenderer {
 
     updateFromGame(game, paused) {
         this.uiGroup.userData.isMenu = false;
+        if (game.alive) {
+            this.hasExploded = false;
+            this.gameOverStart = 0;
+        }
+        let deadRowThreshold = -1;
+        if (!game.alive && this.gameOverStart) {
+            const duration = 1000;
+            const elapsed = performance.now() - this.gameOverStart;
+            const progress = Math.min(1.0, elapsed / duration);
+            
+            // calculate how many rows from the top should be dark
+            deadRowThreshold = Math.floor(progress * (this.boardHeight + 2)); 
+
+            if (progress >= 1.0 && !this.hasExploded) {
+                this.explodeBoard(game);
+                this.hasExploded = true;
+            }
+        }
+
         const currentLocked = new Set();
         const newlyLocked = [];
         this.boardWidth = game.w;
@@ -616,10 +647,12 @@ class ThreeTritrisRenderer {
         this._clearGroup(this.activeGroup);
         this._clearGroup(this.nextPieceGroup);
 
+        if (this.hasExploded) return;
         //  LOCKED GRID 
         const grid = game.grid.grid;
         if (!paused) {
             for (let row = 0; row < game.h; row++) {
+                const isRowDead = (row <= deadRowThreshold);
                 for (let col = 0; col < game.w; col++) {
                     const cell = grid[row][col];
                     if (!cell || !cell.tris) continue;
@@ -649,7 +682,8 @@ class ThreeTritrisRenderer {
                                 subRow,
                                 subCol,
                                 colorIndex,
-                                false
+                                false,
+                                isRowDead
                             );
                         }
                     }
@@ -674,6 +708,7 @@ class ThreeTritrisRenderer {
         if (!paused && game.currentPiece) {
             const p = game.currentPiece; // Piece instance 
             for (let row = 0; row < p.grid.length; row++) {
+                const isRowDead = (row <= deadRowThreshold);
                 for (let col = 0; col < p.grid[0].length; col++) {
                     const cell = p.grid[row][col];
                     if (!cell || !cell.tris) continue;
@@ -693,7 +728,8 @@ class ThreeTritrisRenderer {
                                 subRow,
                                 subCol,
                                 tri.clr,
-                                true
+                                true,
+                                isRowDead
                             );
                         }
                     }
@@ -808,9 +844,12 @@ class ThreeTritrisRenderer {
         pivot.position.set(previewCenterX, previewCenterY, 0.5);
     }
 
+    triggerGameOver() {
+        this.gameOverStart = performance.now();
+        this.hasExploded = false; 
+    }
 
-
-    _addTriangleMesh(group, gridCol, gridRow, subRow, subCol, colorIndex, isActive) {
+    _addTriangleMesh(group, gridCol, gridRow, subRow, subCol, colorIndex, isActive, isDead = false) {
         const geom = this._getTriangleGeometry(subRow, subCol);
         if (!geom) return;
 
@@ -818,7 +857,10 @@ class ThreeTritrisRenderer {
         
         // make active piece glow brightly, locked pieces darker and transparent
         let mat;
-        if (isActive) {
+        if (isDead) {
+            mat = this.deadMaterial;
+        }
+        else if (isActive) {
             mat = this.activeMaterialsCache[colorIndex];
         } else {
             mat = this.materialsCache[colorIndex];
@@ -1003,9 +1045,7 @@ class ThreeTritrisRenderer {
         }
     }
 
-    spawnParticles(worldX, worldY, colorHex, speedMultiplier = 1.0) {
-        const count = 24;
-
+    spawnParticles(worldX, worldY, colorHex, speedMultiplier = 1.0, count = 24) {
         for (let i = 0; i < count; i++) {
             const mat = new THREE.MeshBasicMaterial({
                 color: 0xffffff, 
@@ -1214,6 +1254,28 @@ class ThreeTritrisRenderer {
         }
     }
 
+    explodeBoard(game) {
+        const grid = game.grid.grid;
+        sfx.play("lock", 200); 
+
+        for (let row = 0; row < game.h; row++) {
+            for (let col = 0; col < game.w; col++) {
+                const cell = grid[row][col];
+                if (!cell || !cell.tris) continue;
+
+                for (let subRow = 0; subRow < 2; subRow++) {
+                    for (let subCol = 0; subCol < 2; subCol++) {
+                        const tri = cell.tris[subRow][subCol];
+                        if (tri) {
+                            const cx = (col - this.boardWidth / 2 + 0.5) * this.cellSize;
+                            const cy = (this.boardHeight / 2 - row - 0.5) * this.cellSize;
+                            this.spawnParticles(cx, cy, 0x88ffff, 3.0, 6);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     startBoardBounce() {
         this.bounceTime = this.bounceDuration;

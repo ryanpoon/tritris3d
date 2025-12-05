@@ -138,9 +138,17 @@ function draw() {
         renderThreeFromGame(game, false);
 
         if (!game.alive) {
+            gameState = gameStates.GAMEOVER;
+            sfx.play("gameover");
+            game.gameOverTimer = Date.now();
+            
+            if (threeRenderer) threeRenderer.triggerGameOver();
+        }
+    } else if (gameState == gameStates.GAMEOVER) {
+        renderThreeFromGame(game, false);
+        if (Date.now() - game.gameOverTimer > 2500) {
             lastGameScore = game.score;
-            if (!game.practice)
-                setHighScores(game.score, game.lines, true);
+            setHighScores(game.score, game.lines, true);            
             gameState = gameStates.MENU;
             dom.playDiv.show();
         }

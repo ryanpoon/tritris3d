@@ -24,6 +24,7 @@ class TritrisSound {
         this.load("lock",      "sfx/lock.wav", 0.8);
         this.load("lineclear", "sfx/lineclear.wav", 1.0);
         this.load("lightshow", "sfx/lightshow.wav", 1.2);
+        this.load("gameover", "sfx/gameover.wav", 1.2);
         // this.load("ambient",   "sfx/ambient_loop.wav", 0.25);
     }
 

@@ -3,7 +3,8 @@ const gameStates = {
     LOADING: 0,
     MENU: 1,
     INGAME: 2,
-    PAUSED: 3
+    PAUSED: 3,
+    GAMEOVER: 4
 };
 const padding = 25;
 
