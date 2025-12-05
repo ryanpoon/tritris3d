@@ -99,11 +99,16 @@ class ThreeTritrisRenderer {
         this.scene.add(rim);
 
         // materials
-        this.gridMaterial = new THREE.LineBasicMaterial({
+        this.gridMaterial = new LineMaterial({
             color: 0x44aaff,
             transparent: true,
             opacity: 0.35,
+            linewidth: 0.08,      
+            worldUnits: true,    
+            dashed: false,
+            alphaToCoverage: true 
         });
+        this.gridMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
         // particle geometries
         this.particleGeo = new THREE.TetrahedronGeometry(0.15, 0);
@@ -345,6 +350,9 @@ class ThreeTritrisRenderer {
         this.camera.aspect = w / h;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(w, h);
+        if (this.gridMaterial && this.gridMaterial.resolution) {
+            this.gridMaterial.resolution.set(w, h);
+        }
     }
 
     // messed with adding a board frame, but decided against it for now
@@ -830,38 +838,40 @@ class ThreeTritrisRenderer {
         group.add(mesh);
     }
     _createGridLines() {
-        // clear old lines
-        while (this.gridGroup.children.length > 0) {
-            const c = this.gridGroup.children.pop();
-            if (c.material) c.material.dispose();
-            if (c.geometry) c.geometry.dispose();
-        }
+        this._clearGroup(this.gridGroup);
 
         const w = this.boardWidth;
         const h = this.boardHeight;
         const s = this.cellSize;
-        const z = 0.5;
+        const z = 0.2; 
 
-        // horizontal lines
-        for (let r = 0; r <= h; r++) {
-            const y = (h/2 - r) * s;
-            const geometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(-(w/2)*s, y, z),
-                new THREE.Vector3((w/2)*s,  y, z)
+        // vertical Lines
+        for (let c = 0; c <= w; c++) {
+            const x = (c - w / 2) * s;
+            
+            const geometry = new LineGeometry();
+            geometry.setPositions([
+                x,  (h / 2) * s, z, 
+                x, -(h / 2) * s, z  
             ]);
-            const line = new THREE.Line(geometry, this.gridMaterial);
+            
+            const line = new Line2(geometry, this.gridMaterial);
+            line.computeLineDistances(); //
             this.gridGroup.add(line);
         }
 
-        // vertical lines
-        for (let c = 0; c <= w; c++) {
-            const x = (c - w/2) * s;
-            const geometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(x,  (h/2)*s, z),
-                new THREE.Vector3(x, -(h/2)*s, z)
+        // horizontal Lines
+        for (let r = 0; r <= h; r++) {
+            const y = (h / 2 - r) * s;
+            
+            const geometry = new LineGeometry();
+            geometry.setPositions([
+                -(w / 2) * s, y, z, 
+                 (w / 2) * s, y, z  
             ]);
 
-            const line = new THREE.Line(geometry, this.gridMaterial);
+            const line = new Line2(geometry, this.gridMaterial);
+            line.computeLineDistances();
             this.gridGroup.add(line);
         }
     }
@@ -1236,7 +1246,7 @@ class ThreeTritrisRenderer {
 
         // grid opacity modulation
         const t = performance.now() * 0.001;
-        this.gridMaterial.opacity = 0.45 + Math.sin(t * 2.0) * 0.10;
+        this.gridMaterial.opacity = 0.45 + Math.sin(t * 2.0) * 0.20;
 
         // grid color modulation
         const hue = (0.55 + 0.05 * Math.sin(t * 0.7)) % 1;
