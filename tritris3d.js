@@ -867,7 +867,7 @@ class ThreeTritrisRenderer {
     }
 
     _createStarfield() {
-        const starCount = 2000;
+        const starCount = 6000;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(starCount * 3);
 
@@ -1143,7 +1143,7 @@ class ThreeTritrisRenderer {
         this.lineClearRows = rows.slice();    
         this.lineClearTime = 0.15; 
         this.lineClearElapsed = 0;
-        this.starSpeedTime = 2.0;
+        this.starSpeedTime = rows.length > 2 ? 4.0 : 2.0;
         this.starSpeedElapsed = 0;
         this.starRotDir *= -1.0;
         this.lineClearEffects = [];
