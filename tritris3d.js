@@ -59,7 +59,7 @@ class ThreeTritrisRenderer {
     constructor(piecesData) {
         this.piecesData = piecesData;
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x2e2d2d);
+        this.scene.background = new THREE.Color(0x1c1c1c);
 
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
@@ -102,8 +102,8 @@ class ThreeTritrisRenderer {
         this.gridMaterial = new LineMaterial({
             color: 0x44aaff,
             transparent: true,
-            opacity: 0.35,
-            linewidth: 0.08,      
+            opacity: 0.15,
+            linewidth: 0.06,      
             worldUnits: true,    
             dashed: false,
             alphaToCoverage: true 
@@ -169,11 +169,11 @@ class ThreeTritrisRenderer {
             new THREE.MeshStandardMaterial({
                 color: c,
                 emissive: c,
-                emissiveIntensity: 0.65,
+                emissiveIntensity: 1.1,
                 metalness: 0.15,
                 roughness: 0.45,
                 transparent: true,
-                opacity: 0.55,
+                opacity: 0.65,
                 side: THREE.DoubleSide
             })
         );
@@ -877,7 +877,7 @@ class ThreeTritrisRenderer {
     }
 
     _createStarfield() {
-        const starCount = 6000;
+        const starCount = 4000;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(starCount * 3);
 
@@ -921,7 +921,7 @@ class ThreeTritrisRenderer {
             return;
         }
 
-        const count = 500; 
+        const count = 200; 
 
         for (let i = 0; i < count; i++) {
             const pieceGroup = new THREE.Group();
@@ -995,7 +995,7 @@ class ThreeTritrisRenderer {
                 z: (Math.random() - 0.5) * 0.015
             };
 
-            const s = 2.0;
+            const s = 3.0;
             pieceGroup.scale.set(s, s, s);
 
             this.bgPieceGroup.add(pieceGroup);
@@ -1130,7 +1130,7 @@ class ThreeTritrisRenderer {
         console.log("Triggering light show!");
         sfx.play("lightshow");
 
-        this.lightshowTime = 0.4;
+        this.lightshowTime = 0.7;
         this.lightshowElapsed = 0;
 
         // Full-board quad
@@ -1246,8 +1246,7 @@ class ThreeTritrisRenderer {
 
         // grid opacity modulation
         const t = performance.now() * 0.001;
-        this.gridMaterial.opacity = 0.45 + Math.sin(t * 2.0) * 0.20;
-
+        this.gridMaterial.opacity = 0.10 + Math.sin(t * 4.0) * 0.10;
         // grid color modulation
         const hue = (0.55 + 0.05 * Math.sin(t * 0.7)) % 1;
         this.gridMaterial.color.setHSL(hue, 0.8, 0.55);
