@@ -282,12 +282,22 @@ class ThreeTritrisRenderer {
         lsSprite.position.set(4, 4, 10);
 
         // credits
-        const creditsSprite = this._makeTextSprite("Made by: Ryan Poon for CS 175", {
+        const creditsSprite = this._makeTextSprite("Made by Ryan Poon for CS 175", {
+            fontFace: 'Verdana',
             fontSize: 40,
-            textColor: '#ff00ff',
+            textColor: '#f6e41cff',
             scale: 0.012
         });
-        creditsSprite.position.set(-4, 3, 10);
+        creditsSprite.position.set(-13, -6, 10);
+
+        const creditsSprite2 = this._makeTextSprite("Built off of Tritris, made by Leo Gagnon", {
+            fontFace: 'Verdana',
+            fontSize: 40,
+            textColor: '#f6e41cff',
+            scale: 0.012
+        });
+        creditsSprite2.position.set(-13, -7, 10);
+        
         
 
         // start Instruction 
@@ -301,7 +311,8 @@ class ThreeTritrisRenderer {
         
 
         this.uiGroup.add(titleSprite, levelSprite, spinSprite, soundSprite, 
-            lsSprite, hsSprite, controlsSprite, creditsSprite, startSprite);
+            lsSprite, hsSprite, controlsSprite, creditsSprite, startSprite,
+            creditsSprite2);
         this.uiGroup.userData.isMenu = true;
         this.uiGroup.userData.lastLevel = currentLevel;
         this.uiGroup.userData.lastSelection = selectionIndex;
