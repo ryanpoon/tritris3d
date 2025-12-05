@@ -199,11 +199,13 @@ function keyPressed() {
             currentLvl--;
             if (currentLvl < 0) currentLvl = 29; // Wrap around
             dom.level.value(currentLvl);
+            localStorage.setItem('startLevel', currentLvl);
         } 
         else if (keyCode === RIGHT_ARROW) {
             currentLvl++;
             if (currentLvl > 29) currentLvl = 0; // Wrap around
             dom.level.value(currentLvl);
+            localStorage.setItem('startLevel', currentLvl);
         }
         
         if (keyCode !== controls.start) return; 
