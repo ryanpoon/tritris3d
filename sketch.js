@@ -1,3 +1,4 @@
+let lastGameScore = 0;
 let settings = {
     oldGraphics: getSavedValue('oldGraphics', false),
     showGridLines: getSavedValue('showGridLines', true),
@@ -121,7 +122,8 @@ function draw() {
     }
     if (gameState == gameStates.MENU) {
         cursor();
-        renderThreeMenu(); 
+        let highScore = parseInt(localStorage.getItem('TritrisPointsHigh')) || 0;
+        renderThreeMenu(lastGameScore, highScore); 
         return;
     }
 
@@ -132,6 +134,7 @@ function draw() {
         renderThreeFromGame(game, false);
 
         if (!game.alive) {
+            lastGameScore = game.score;
             if (!game.practice)
                 setHighScores(game.score, game.lines, true);
             gameState = gameStates.MENU;

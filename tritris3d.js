@@ -42,7 +42,7 @@ function renderThreeFromGame(game, paused) {
 }
 
 // called every frame from draw() when gameState is MENU
-function renderThreeMenu() {
+function renderThreeMenu(lastScore, highScore) {
     if (!threeRenderer) return;
     
     if (threeRenderer.gridGroup.children.length === 0) {
@@ -50,7 +50,7 @@ function renderThreeMenu() {
     }
 
     const currentLvl = parseInt(select('#level').value()) || 0;
-    threeRenderer.showMenuUI(currentLvl);
+    threeRenderer.showMenuUI(currentLvl, lastScore, highScore);
     threeRenderer.stars.rotation.y += 0.0003; 
     threeRenderer.render();
 }
@@ -103,6 +103,10 @@ class ThreeTritrisRenderer {
             opacity: 0.35,
         });
 
+        // particle geometries
+        this.particleGeo = new THREE.PlaneGeometry(0.2, 0.02);
+        this.shockwaveGeo = new THREE.RingGeometry(0.01, 0.12, 32);
+
         //  groups for different sets of meshes 
         this.boardGroup = new THREE.Group();
         this.boardGroup.name = 'BoardGroup3D';
@@ -149,6 +153,32 @@ class ThreeTritrisRenderer {
             0xffffff  // White Ninja
         ];
 
+        // materials caches for locked and active triangles
+        this.materialsCache = this.colors.map(c => 
+            new THREE.MeshStandardMaterial({
+                color: c,
+                emissive: c,
+                emissiveIntensity: 0.65,
+                metalness: 0.15,
+                roughness: 0.45,
+                transparent: true,
+                opacity: 0.55,
+                side: THREE.DoubleSide
+            })
+        );
+        this.activeMaterialsCache = this.colors.map(c => 
+            new THREE.MeshStandardMaterial({
+                color: c,
+                emissive: c,
+                emissiveIntensity: 1.6,
+                metalness: 0.2,
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide
+            })
+        );
+
         // Geometry cache: key 'row_col' -> BufferGeometry
         this.triGeometryCache = {};
         this.localTriangles = this._buildLocalTriangleDefs();
@@ -165,7 +195,7 @@ class ThreeTritrisRenderer {
         
     }
 
-    showMenuUI(currentLevel) {
+    showMenuUI(currentLevel, lastScore, highScore) {
         if (this.uiGroup.userData.isMenu) {
             if (this.uiGroup.userData.lastLevel !== currentLevel) {
                 this._updateMenuLevelText(currentLevel);
@@ -199,6 +229,21 @@ class ThreeTritrisRenderer {
         });
         controlsSprite.position.set(0, 0, 10);
         
+        // high Score
+        const hsSprite = this._makeTextSprite(`High Score: ${highScore || 0}`, {
+            fontSize: 50,
+            textColor: '#00ff00',
+            scale: 0.015
+        });
+        hsSprite.position.set(4, 3, 10);
+
+        // previous Score
+        const lsSprite = this._makeTextSprite(`Last Score: ${lastScore || 0}`, {
+            fontSize: 50,
+            textColor: '#cccccc',
+            scale: 0.015
+        });
+        lsSprite.position.set(4, 4, 10);
 
         // credits
         const creditsSprite = this._makeTextSprite("Made by: Ryan Poon for CS 175", {
@@ -219,7 +264,7 @@ class ThreeTritrisRenderer {
         startSprite.position.set(-5, -6, 10);
         
 
-        this.uiGroup.add(titleSprite, this.levelSprite, controlsSprite, creditsSprite, startSprite);
+        this.uiGroup.add(titleSprite, this.levelSprite, lsSprite, hsSprite, controlsSprite, creditsSprite, startSprite);
         this.uiGroup.userData.isMenu = true;
         this.uiGroup.userData.lastLevel = currentLevel;
     }
@@ -430,6 +475,13 @@ class ThreeTritrisRenderer {
         }
 
         if (!game) return;
+
+        if (this.lastScore === game.score && 
+            this.lastLines === game.lines && 
+            this.lastLevel === game.level &&
+            this.lastPaused === paused) {
+            return;
+        }
 
         // Score / lines / level text
         const scoreText = `Score: ${game.score}`;
@@ -685,30 +737,12 @@ class ThreeTritrisRenderer {
 
         const colorHex = this.colors[colorIndex] || 0xffffff;
         
-        let mat;
         // make active piece glow brightly, locked pieces darker and transparent
+        let mat;
         if (isActive) {
-            mat = new THREE.MeshStandardMaterial({
-                color: colorHex,
-                emissive: colorHex,
-                emissiveIntensity: 1.6,   
-                metalness: 0.2,
-                roughness: 0.2,
-                transparent: true,
-                opacity: 0.8,
-                side: THREE.DoubleSide
-            });
+            mat = this.activeMaterialsCache[colorIndex];
         } else {
-            mat = new THREE.MeshStandardMaterial({
-                color: colorHex,
-                emissive: colorHex,
-                emissiveIntensity: 0.65,
-                metalness: 0.15,
-                roughness: 0.45,    
-                transparent: true,
-                opacity: 0.55,
-                side: THREE.DoubleSide
-            });
+            mat = this.materialsCache[colorIndex];
         }
 
 
@@ -791,13 +825,7 @@ class ThreeTritrisRenderer {
         const count = 32;
 
         for (let i = 0; i < count; i++) {
-
-            // A spark is a thin quad
-            const geom = new THREE.PlaneGeometry(
-                0.10 + Math.random() * 0.15,  // length
-                0.02                          // thickness
-            );
-
+           
             const mat = new THREE.MeshBasicMaterial({
                 color: colorHex,
                 transparent: true,
@@ -807,7 +835,7 @@ class ThreeTritrisRenderer {
                 side: THREE.DoubleSide
             });
 
-            const spark = new THREE.Mesh(geom, mat);
+            const spark = new THREE.Mesh(this.particleGeo, mat);
 
             spark.position.set(worldX, worldY, 0.4);
 
@@ -833,7 +861,6 @@ class ThreeTritrisRenderer {
     }
 
     spawnShockwave(worldX, worldY, colorHex) {
-        const geom = new THREE.RingGeometry(0.01, 0.12, 64);
         const mat = new THREE.MeshBasicMaterial({
             color: colorHex,
             transparent: true,
@@ -843,7 +870,7 @@ class ThreeTritrisRenderer {
             depthWrite: false
         });
 
-        const ring = new THREE.Mesh(geom, mat);
+        const ring = new THREE.Mesh(this.shockwaveGeo, mat);
 
         ring.position.set(worldX, worldY, 0.3);
         ring.velocity = new THREE.Vector3(0, 0, 0);
