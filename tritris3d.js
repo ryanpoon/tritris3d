@@ -9,12 +9,12 @@ let threeRenderer = null;
 
 
 // Called once after assets are loaded (from finishedLoading in sketch.js)
-function initThreeRenderer() {
+function initThreeRenderer(pieces) {
     if (typeof THREE === 'undefined') {
         console.error('THREE is not available. Did you include the Three.js script in index.html?');
         return;
     }
-    threeRenderer = new ThreeTritrisRenderer();
+    threeRenderer = new ThreeTritrisRenderer(pieces);
 }
 
 // Called every frame from draw() when gameState is INGAME or PAUSED
@@ -52,11 +52,12 @@ function renderThreeMenu(lastScore, highScore, selectionIndex) {
     const currentLvl = parseInt(select('#level').value()) || 0;
 
     threeRenderer.showMenuUI(currentLvl, lastScore, highScore, selectionIndex);
-    threeRenderer.stars.rotation.y += 0.0003; 
+    threeRenderer.starsGroup.rotation.y += 0.0003; 
     threeRenderer.render();
 }
 class ThreeTritrisRenderer {
-    constructor() {
+    constructor(piecesData) {
+        this.piecesData = piecesData;
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x2e2d2d);
 
@@ -105,13 +106,17 @@ class ThreeTritrisRenderer {
         });
 
         // particle geometries
-        this.particleGeo = new THREE.PlaneGeometry(0.2, 0.02);
+        this.particleGeo = new THREE.TetrahedronGeometry(0.15, 0);
         this.shockwaveGeo = new THREE.RingGeometry(0.01, 0.12, 32);
 
         //  groups for different sets of meshes 
         this.boardGroup = new THREE.Group();
         this.boardGroup.name = 'BoardGroup3D';
         this.scene.add(this.boardGroup);
+
+        this.starsGroup = new THREE.Group();
+        this.starsGroup.name = 'StarsGroup3D';
+        this.scene.add(this.starsGroup);
 
         this.activeGroup = new THREE.Group();
         this.activeGroup.name = 'ActivePiece3D';
@@ -192,8 +197,7 @@ class ThreeTritrisRenderer {
         window.addEventListener('resize', () => this._onResize());
         this._onResize();
         this._createStarfield();
-
-        
+        this._createBackgroundPieces();
     }
 
     showMenuUI(currentLevel, lastScore, highScore, selectionIndex) {
@@ -868,9 +872,17 @@ class ThreeTritrisRenderer {
         const positions = new Float32Array(starCount * 3);
 
         for (let i = 0; i < starCount; i++) {
-            positions[i * 3 + 0] = (Math.random() - 0.5) * 200;
-            positions[i * 3 + 1] = (Math.random() - 0.5) * 200;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+            const vec = new THREE.Vector3(
+                Math.random() - 0.5,
+                Math.random() - 0.5,
+                Math.random() - 0.5
+            ).normalize();
+            const distance = 40 + Math.random() * 100;
+            vec.multiplyScalar(distance);
+
+            positions[i * 3 + 0] = vec.x;
+            positions[i * 3 + 1] = vec.y;
+            positions[i * 3 + 2] = vec.z;
         }
 
         geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -883,18 +895,110 @@ class ThreeTritrisRenderer {
         });
 
         const stars = new THREE.Points(geometry, material);
-        this.scene.add(stars);
-
-        this.stars = stars;
+        this.starsGroup.add(stars);
     };
 
-    spawnParticles(worldX, worldY, colorHex, speedMultiplier = 1.0) {
-        const count = 32;
+    _createBackgroundPieces() {
+        // clear any existing background pieces
+        
+        this.bgPieces = [];
+        this.bgPieceGroup = new THREE.Group();
+        this.starsGroup.add(this.bgPieceGroup);
+
+        const sourceData = this.piecesData || (typeof piecesJSON !== 'undefined' ? piecesJSON : null);
+        if (!sourceData || !sourceData.pieces) {
+            console.warn("Background generation skipped: No piece data found.");
+            return;
+        }
+
+        const count = 500; 
 
         for (let i = 0; i < count; i++) {
-           
-            const mat = new THREE.MeshBasicMaterial({
+            const pieceGroup = new THREE.Group();
+            const def = sourceData.pieces[Math.floor(Math.random() * sourceData.pieces.length)];
+            const colorIndex = def.color;
+            const colorHex = this.colors[colorIndex];
+
+            const material = new THREE.MeshStandardMaterial({
                 color: colorHex,
+                emissive: colorHex,
+                emissiveIntensity: 0.3,
+                roughness: 0.2,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.5,
+                side: THREE.DoubleSide
+            });
+
+            const shapeGrid = def.pieces;
+            const rows = shapeGrid.length;
+            const cols = shapeGrid[0].length;
+
+            const midCol = (cols - 1) / 2;
+            const midRow = (rows - 1) / 2;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = shapeGrid[r][c]; 
+                    
+                    for (let sr = 0; sr < 2; sr++) {
+                        for (let sc = 0; sc < 2; sc++) {
+                            if (cell[sr][sc] === 1) {
+                                const geom = this._getTriangleGeometry(sr, sc);
+                                if (geom) {
+                                    const mesh = new THREE.Mesh(geom, material);
+                                    
+                                    // calculate position relative to group center
+                                    const x = (c - midCol) * this.cellSize;
+                                    const y = -(r - midRow) * this.cellSize; 
+                                    
+                                    mesh.position.set(x, y, 0);
+                                    pieceGroup.add(mesh);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+             // random position in a sphere around the origin, away from the center
+            const vec = new THREE.Vector3(
+                Math.random() - 0.5,
+                Math.random() - 0.5,
+                Math.random() - 0.5
+            ).normalize();
+            
+            const distance = 100 + Math.random() * 100;
+            vec.multiplyScalar(distance);
+            pieceGroup.position.copy(vec);
+            
+            // random spin 
+            pieceGroup.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+
+            pieceGroup.userData.rotSpeed = {
+                x: (Math.random() - 0.5) * 0.015,
+                y: (Math.random() - 0.5) * 0.015,
+                z: (Math.random() - 0.5) * 0.015
+            };
+
+            const s = 2.0;
+            pieceGroup.scale.set(s, s, s);
+
+            this.bgPieceGroup.add(pieceGroup);
+            this.bgPieces.push(pieceGroup);
+        }
+    }
+
+    spawnParticles(worldX, worldY, colorHex, speedMultiplier = 1.0) {
+        const count = 24;
+
+        for (let i = 0; i < count; i++) {
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0xffffff, 
                 transparent: true,
                 opacity: 1.0,
                 blending: THREE.AdditiveBlending, 
@@ -905,21 +1009,30 @@ class ThreeTritrisRenderer {
             const spark = new THREE.Mesh(this.particleGeo, mat);
 
             spark.position.set(worldX, worldY, 0.4);
+            // random spin
+            spark.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            spark.rotVelocity = new THREE.Vector3(
+                (Math.random() - 0.5) * 15,
+                (Math.random() - 0.5) * 15,
+                (Math.random() - 0.5) * 15
+            );
 
-            // random rotation so streaks point randomly
-            spark.rotation.z = Math.random() * Math.PI * 2;
-
-            // fast velocity
             const angle = Math.random() * Math.PI * 2;
-            const speed = 2.5 + Math.random() * 2.0 * speedMultiplier;
+            const speed = 1.5 + Math.random() * 3.5 * speedMultiplier;
             spark.velocity = new THREE.Vector3(
                 Math.cos(angle) * speed,
                 Math.sin(angle) * speed,
-                Math.random() * 1.2
+                Math.random() * 2.0
             );
 
-            // lifetime
-            spark.life = 0.4 + Math.random() * 0.3;
+            // save the target color so we can fade to it
+            spark.targetColor = new THREE.Color(colorHex);
+
+            // Variation in size
+            const s = 0.5 + Math.random() * 0.8;
+            spark.scale.set(s, s, s);
+
+            spark.life = 0.5 + Math.random() * 0.4;
             spark.startLife = spark.life;
 
             this.particleGroup.add(spark);
@@ -1109,8 +1222,17 @@ class ThreeTritrisRenderer {
                 this.starSpeedTime = 0;
             }
         }
-        this.stars.rotation.y += 0.0004 * speedFactor * this.starRotDir;
-        this.stars.rotation.x += 0.0001 * speedFactor * this.starRotDir;
+        this.starsGroup.rotation.y += 0.0004 * speedFactor * this.starRotDir;
+        this.starsGroup.rotation.x += 0.0001 * speedFactor * this.starRotDir;
+
+        // background piece animation
+        if (this.bgPieces) {
+            for (const group of this.bgPieces) {
+                group.rotation.x += group.userData.rotSpeed.x;
+                group.rotation.y += group.userData.rotSpeed.y;
+                group.rotation.z += group.userData.rotSpeed.z;
+            }
+        }
 
         // grid opacity modulation
         const t = performance.now() * 0.001;
@@ -1144,7 +1266,6 @@ class ThreeTritrisRenderer {
 
             if (p.life <= 0) {
                 this.particleGroup.remove(p);
-                p.geometry.dispose();
                 p.material.dispose();
                 this.particles.splice(i, 1);
                 continue;
@@ -1153,21 +1274,32 @@ class ThreeTritrisRenderer {
             // movement
             p.position.addScaledVector(p.velocity, dt);
             p.velocity.multiplyScalar(0.96);
+
             // slight upward drift
             p.velocity.z += 0.4 * dt;
-            
-            // expand shockwave ring
-            if (p.geometry.type === "RingGeometry") {
+
+            if (p.geometry.type === "TetrahedronGeometry") {
+                p.rotation.x += p.rotVelocity.x * dt;
+                p.rotation.y += p.rotVelocity.y * dt;
+                p.rotation.z += p.rotVelocity.z * dt;
+
+                // interpolate from white to target color
+                const progress = 1 - (p.life / p.startLife);
+                if (progress < 0.2) {
+                    p.material.color.setHex(0xffffff).lerp(p.targetColor, progress / 0.2);
+                } else {
+                    p.material.color.copy(p.targetColor);
+                }
+                p.material.opacity = (p.life / p.startLife);
+            }
+            else if (p.geometry.type === "RingGeometry") {
                 const s = 1 + (1 - p.life / p.startLife) * 6.0; 
                 p.scale.set(s, s, s);
             }
             // flicker
             if (p.geometry.type === "RingGeometry") {
                 p.material.opacity = p.life / p.startLife;
-            } else {
-                p.material.opacity = (p.life / p.startLife) * (0.6 + Math.random() * 0.4);
-            }
-
+            } 
         }
 
         // shader rainbow sweep

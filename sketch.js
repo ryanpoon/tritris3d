@@ -115,7 +115,7 @@ function finishedLoading() {
         settingControl = 'restart'; setControl(27);
     });
 
-    initThreeRenderer();
+    initThreeRenderer(piecesJSON);
     gameState = gameStates.MENU;
 }
 
