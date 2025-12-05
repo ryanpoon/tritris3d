@@ -120,7 +120,7 @@ class ThreeTritrisRenderer {
         this.cellSize = 1.4;
 
         this.bounceTime = 0;
-        this.bounceDuration = 0.35; 
+        this.bounceDuration = 0.15; 
         this.bounceHeight = 0.70;  
 
         // Colors by triangle color index, mirroring Game.colors order. 

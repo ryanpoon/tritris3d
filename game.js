@@ -390,8 +390,15 @@ class Game {
             //The piece (possibly) moved horizontally, rotated and moved down
             if (horzDirection != 0) {
                 this.playMoveSound = true;
+                sfx.play("move", 600);
             }
             if (rotation != 0) {
+                if (rotation == -1) {
+                    sfx.play("rotate", 800);
+                } else {
+                    sfx.play("rotate", 0);
+                }
+                
                 this.playMoveSound = true;
                 this.zCharged = false;
                 this.xCharged = false;

@@ -19,9 +19,8 @@ class TritrisSound {
     }
 
     loadAll() {
-        // Replace these URLs with your own files
-        // this.load("move",      "sfx/move.wav", 0.4);
-        // this.load("rotate",    "sfx/rotate.wav", 0.5);
+        this.load("move",      "sfx/move.wav", 0.9);
+        this.load("rotate",    "sfx/rotate.wav", 0.3);
         this.load("lock",      "sfx/lock.wav", 0.8);
         this.load("lineclear", "sfx/lineclear.wav", 1.0);
         this.load("lightshow", "sfx/lightshow.wav", 1.2);
