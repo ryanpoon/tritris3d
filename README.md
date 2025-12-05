@@ -1,9 +1,4 @@
-# Tritris
-### Tetris with Triangles!
-Join the Discord! https://discord.gg/NUKWP6UCHF
+# Tritris 3D
+### A fork of tritris with 3D graphis and sounds
 
-Watch the video!
-<br>
-[![Tritris video](http://img.youtube.com/vi/HMkfj1OJ08Q/0.jpg)](https://youtu.be/HMkfj1OJ08Q "I made Tetris with Triangles")
-
-Play the game! https://goel25.github.io/tritris
+Made by Ryan Poon for Tufts CS 175 Computer Graphics final project

@@ -123,6 +123,8 @@ class ThreeTritrisRenderer {
         this.bounceDuration = 0.15; 
         this.bounceHeight = 0.70;  
 
+        this.starRotDir = 1.0; 
+
         // Colors by triangle color index, mirroring Game.colors order. 
         this.colors = [
             0xff0000, // Red boomerang
@@ -846,6 +848,9 @@ class ThreeTritrisRenderer {
         this.lineClearRows = rows.slice();    
         this.lineClearTime = 0.15; 
         this.lineClearElapsed = 0;
+        this.starSpeedTime = 2.0;
+        this.starSpeedElapsed = 0;
+        this.starRotDir *= -1.0;
         this.lineClearEffects = [];
 
         for (const r of rows) {
@@ -912,8 +917,18 @@ class ThreeTritrisRenderer {
 
     render() {
         // star animation
-        this.stars.rotation.y += 0.0004;
-        this.stars.rotation.x += 0.0001;
+        let speedFactor = 1.0;
+        if (this.starSpeedTime && this.starSpeedTime > 0) {
+            this.starSpeedElapsed += 0.016;
+            const t = Math.min(1.0, this.starSpeedElapsed / this.starSpeedTime);
+            speedFactor = 1.0 + (80.0 - 1.0) * (1.0 - t); // ease out
+
+            if (t >= 1) {
+                this.starSpeedTime = 0;
+            }
+        }
+        this.stars.rotation.y += 0.0004 * speedFactor * this.starRotDir;
+        this.stars.rotation.x += 0.0001 * speedFactor * this.starRotDir;
 
         // grid opacity modulation
         const t = performance.now() * 0.001;
