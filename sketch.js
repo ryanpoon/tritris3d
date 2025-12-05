@@ -7,7 +7,11 @@ let settings = {
     showFlash: getSavedValue('showFlash', true),
     use4Piece: getSavedValue('use4Piece', false),
     pauseOnBlur: getSavedValue('pauseOnBlur', true),
+    spinNextPiece: getSavedValue('spinNextPiece', true),
+    soundEnabled: getSavedValue('soundEnabled', true),
 }
+
+let menuSelection = 0;
 
 const keyboardMap = [ //From https://stackoverflow.com/questions/1772179/get-character-value-from-keycode-in-javascript-then-trim
   '','','','CANCEL','','','HELP','','BACK_SPACE','TAB','','','CLEAR','ENTER','ENTER_SPECIAL','','SHIFT','CONTROL','ALT','PAUSE','CAPS_LOCK','KANA','EISU','JUNJA','FINAL','HANJA','','ESCAPE','CONVERT','NONCONVERT','ACCEPT','MODECHANGE','SPACE','PAGE_UP','PAGE_DOWN','END','HOME','LEFT ARROW','UP ARROW','RIGHT ARROW','DOWN ARROW','SELECT','PRINT','EXECUTE','PRINTSCREEN','INSERT','DELETE','','0','1','2','3','4','5','6','7','8','9','COLON','SEMICOLON','LESS_THAN','EQUALS','GREATER_THAN','QUESTION_MARK','AT','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','OS_KEY','','CONTEXT_MENU','','SLEEP','NUMPAD0','NUMPAD1','NUMPAD2','NUMPAD3','NUMPAD4','NUMPAD5','NUMPAD6','NUMPAD7','NUMPAD8','NUMPAD9','MULTIPLY','ADD','SEPARATOR','SUBTRACT','DECIMAL','DIVIDE','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12','F13','F14','F15','F16','F17','F18','F19','F20','F21','F22','F23','F24','','','','','','','','','NUM_LOCK','SCROLL_LOCK','WIN_OEM_FJ_JISHO','WIN_OEM_FJ_MASSHOU','WIN_OEM_FJ_TOUROKU','WIN_OEM_FJ_LOYA','WIN_OEM_FJ_ROYA','','','','','','','','','','CIRCUMFLEX','EXCLAMATION','DOUBLE_QUOTE','HASH','DOLLAR','PERCENT','AMPERSAND','UNDERSCORE','OPEN_PAREN','CLOSE_PAREN','ASTERISK','PLUS','PIPE','HYPHEN_MINUS','OPEN_CURLY_BRACKET','CLOSE_CURLY_BRACKET','TILDE','','','','','VOLUME_MUTE','VOLUME_DOWN','VOLUME_UP','','','SEMICOLON','EQUALS','COMMA','MINUS','PERIOD','SLASH','BACK_QUOTE','','','','','','','','','','','','','','','','','','','','','','','','','','','OPEN_BRACKET','BACK_SLASH','CLOSE_BRACKET','QUOTE','','META','ALTGR','','WIN_ICO_HELP','WIN_ICO_00','','WIN_ICO_CLEAR','','','WIN_OEM_RESET','WIN_OEM_JUMP','WIN_OEM_PA1','WIN_OEM_PA2','WIN_OEM_PA3','WIN_OEM_WSCTRL','WIN_OEM_CUSEL','WIN_OEM_ATTN','WIN_OEM_FINISH','WIN_OEM_COPY','WIN_OEM_AUTO','WIN_OEM_ENLW','WIN_OEM_BACKTAB','ATTN','CRSEL','EXSEL','EREOF','PLAY','ZOOM','','PA1','WIN_OEM_CLEAR',''
@@ -123,7 +127,7 @@ function draw() {
     if (gameState == gameStates.MENU) {
         cursor();
         let highScore = parseInt(localStorage.getItem('TritrisPointsHigh')) || 0;
-        renderThreeMenu(lastGameScore, highScore); 
+        renderThreeMenu(lastGameScore, highScore, menuSelection, settings.spinNextPiece); 
         return;
     }
 
@@ -194,21 +198,55 @@ function controllerKeyPressed() {
 function keyPressed() {
     if (gameState == gameStates.MENU) {
         let currentLvl = parseInt(dom.level.value()) || 0;
-        
-        if (keyCode === LEFT_ARROW) {
-            currentLvl--;
-            if (currentLvl < 0) currentLvl = 29; // Wrap around
-            dom.level.value(currentLvl);
-            localStorage.setItem('startLevel', currentLvl);
-        } 
-        else if (keyCode === RIGHT_ARROW) {
-            currentLvl++;
-            if (currentLvl > 29) currentLvl = 0; // Wrap around
-            dom.level.value(currentLvl);
-            localStorage.setItem('startLevel', currentLvl);
+
+        // Navigate Menu
+        if (keyCode === UP_ARROW) {
+            menuSelection--;
+            if (menuSelection < 0) menuSelection = 2; // wrap to sound
+        } else if (keyCode === DOWN_ARROW) {
+            menuSelection++;
+            if (menuSelection > 2) menuSelection = 0; // wrap to level
+        }
+
+        // handle input based on selection
+        if (menuSelection === 0) {
+            // level Selector
+            if (keyCode === LEFT_ARROW) {
+                currentLvl--;
+                if (currentLvl < 0) currentLvl = 29;
+                dom.level.value(currentLvl);
+                localStorage.setItem('startLevel', currentLvl);
+            } else if (keyCode === RIGHT_ARROW) {
+                currentLvl++;
+                if (currentLvl > 29) currentLvl = 0;
+                dom.level.value(currentLvl);
+                localStorage.setItem('startLevel', currentLvl);
+            }
+        } else if (menuSelection === 1) {
+            // spin checkbox 
+            if (keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW || keyCode === ENTER) {
+                settings.spinNextPiece = !settings.spinNextPiece;
+                localStorage.setItem('spinNextPiece', settings.spinNextPiece);
+                
+                // prevent starting game if toggling with Enter
+                if (keyCode === ENTER) return; 
+            }
+        } else if (menuSelection === 2) {
+            if (keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW || keyCode === ENTER) {
+                settings.soundEnabled = !settings.soundEnabled;
+                localStorage.setItem('soundEnabled', settings.soundEnabled);
+           
+                // prevent starting game if toggling with Enter
+                if (keyCode === ENTER) return; 
+            }
         }
         
-        if (keyCode !== controls.start) return; 
+        // Only start game if Enter pressed AND we are not toggling the checkbox
+        if (keyCode === controls.start && menuSelection !== 1) {
+             // ... standard start game logic (allow it to fall through to existing code)
+        } else {
+             return; // Consume the key press
+        }
     }
     if (settingControl != null) {
         setControl(keyCode);

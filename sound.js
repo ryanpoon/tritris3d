@@ -28,6 +28,7 @@ class TritrisSound {
     }
 
     play(name, detune = 0) {
+        if (!settings.soundEnabled) return;
         const data = this.sounds[name];
         if (!data) return;
 
@@ -43,6 +44,7 @@ class TritrisSound {
     }
 
     loop(name) {
+        if (!settings.soundEnabled) return;
         const data = this.sounds[name];
         if (!data) return;
 

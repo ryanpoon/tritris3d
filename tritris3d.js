@@ -42,7 +42,7 @@ function renderThreeFromGame(game, paused) {
 }
 
 // called every frame from draw() when gameState is MENU
-function renderThreeMenu(lastScore, highScore) {
+function renderThreeMenu(lastScore, highScore, selectionIndex) {
     if (!threeRenderer) return;
     
     if (threeRenderer.gridGroup.children.length === 0) {
@@ -50,7 +50,8 @@ function renderThreeMenu(lastScore, highScore) {
     }
 
     const currentLvl = parseInt(select('#level').value()) || 0;
-    threeRenderer.showMenuUI(currentLvl, lastScore, highScore);
+
+    threeRenderer.showMenuUI(currentLvl, lastScore, highScore, selectionIndex);
     threeRenderer.stars.rotation.y += 0.0003; 
     threeRenderer.render();
 }
@@ -195,13 +196,18 @@ class ThreeTritrisRenderer {
         
     }
 
-    showMenuUI(currentLevel, lastScore, highScore) {
+    showMenuUI(currentLevel, lastScore, highScore, selectionIndex) {
         if (this.uiGroup.userData.isMenu) {
-            if (this.uiGroup.userData.lastLevel !== currentLevel) {
-                this._updateMenuLevelText(currentLevel);
-                this.uiGroup.userData.lastLevel = currentLevel;
+            if (this.uiGroup.userData.lastLevel !== currentLevel ||
+                this.uiGroup.userData.lastSelection !== selectionIndex ||
+                this.uiGroup.userData.lastSpin !== settings.spinNextPiece ||
+                this.uiGroup.userData.lastSound !== settings.soundEnabled) {
+                
+                this._clearGroup(this.uiGroup); 
+                this.uiGroup.userData.isMenu = false; 
+            } else {
+                return;
             }
-            return;
         }
 
         this._clearGroup(this.uiGroup);
@@ -217,20 +223,49 @@ class ThreeTritrisRenderer {
         });
         titleSprite.position.set(-8, 6, 10); 
 
-        // level Selector
-        this.levelSprite = new THREE.Sprite(); 
-        this._updateMenuLevelText(currentLevel || 0);
-        this.levelSprite.position.set(0, 1, 10);
+        // level selector (idx 0)
+        const lvlColor = (selectionIndex === 0) ? '#ffcc00' : '#00ffff'; 
+        const lvlGlow = (selectionIndex === 0) ? '#ffcc00' : '#00ffff';
+        const levelSprite = this._makeTextSprite(`Start Level: ${currentLevel}`, {
+            fontSize: 70,
+            textColor: lvlColor,
+            glowColor: lvlGlow,
+            scale: 0.018
+        });
+        levelSprite.position.set(-4, 1.5, 10);
+
+        // spin checkbox (idx 1)
+        const spinColor = (selectionIndex === 1) ? '#ffcc00' : '#00ffff'; 
+        const spinText = settings.spinNextPiece ? "[X] Spin Next Piece" : "[ ] Spin Next Piece";
+        const spinSprite = this._makeTextSprite(spinText, {
+            fontFace: 'Courier New',
+            fontSize: 60,
+            textColor: spinColor,
+            scale: 0.015
+        });
+        spinSprite.position.set(-5, 0, 10);
+
+        // sound checkbox (idx 2)
+        const soundColor = (selectionIndex === 2) ? '#ffcc00' : '#00ffff'; 
+        const soundText = settings.soundEnabled ? "[X] Sound Enabled" : "[ ] Sound Enabled";
+        const soundSprite = this._makeTextSprite(soundText, {
+            fontFace: 'Courier New',
+            fontSize: 60, 
+            textColor: soundColor, 
+            scale: 0.015
+        });
+        soundSprite.position.set(-5, -0.8, 10); 
         
-        const controlsSprite = this._makeTextSprite("adjust with Left/Right", {
+        const controlsSprite = this._makeTextSprite("Select options with Up/Down and adjust with Left/Right", {
             fontSize: 40,
             textColor: '#aaaaaa',
             scale: 0.012
         });
-        controlsSprite.position.set(0, 0, 10);
+        controlsSprite.position.set(-5, -2.5, 10);
         
         // high Score
         const hsSprite = this._makeTextSprite(`High Score: ${highScore || 0}`, {
+            fontFace: 'Courier New',
             fontSize: 50,
             textColor: '#00ff00',
             scale: 0.015
@@ -239,6 +274,7 @@ class ThreeTritrisRenderer {
 
         // previous Score
         const lsSprite = this._makeTextSprite(`Last Score: ${lastScore || 0}`, {
+            fontFace: 'Courier New',
             fontSize: 50,
             textColor: '#cccccc',
             scale: 0.015
@@ -251,7 +287,7 @@ class ThreeTritrisRenderer {
             textColor: '#ff00ff',
             scale: 0.012
         });
-        creditsSprite.position.set(4, -3, 10);
+        creditsSprite.position.set(-4, 3, 10);
         
 
         // start Instruction 
@@ -264,9 +300,13 @@ class ThreeTritrisRenderer {
         startSprite.position.set(-5, -6, 10);
         
 
-        this.uiGroup.add(titleSprite, this.levelSprite, lsSprite, hsSprite, controlsSprite, creditsSprite, startSprite);
+        this.uiGroup.add(titleSprite, levelSprite, spinSprite, soundSprite, 
+            lsSprite, hsSprite, controlsSprite, creditsSprite, startSprite);
         this.uiGroup.userData.isMenu = true;
         this.uiGroup.userData.lastLevel = currentLevel;
+        this.uiGroup.userData.lastSelection = selectionIndex;
+        this.uiGroup.userData.lastSpin = settings.spinNextPiece;
+        this.uiGroup.userData.lastSound = settings.soundEnabled;
     }
 
     _updateMenuLevelText(level) {
@@ -483,22 +523,36 @@ class ThreeTritrisRenderer {
             return;
         }
 
+        let triPercent = 0;
+        if (game.lines > 0) {
+            triPercent = Math.round((3 * game.tritrisAmt / game.lines) * 100);
+        }
+
         // Score / lines / level text
         const scoreText = `Score: ${game.score}`;
-        const linesText = `Lines ${game.lines}`;
-        const levelText = `Level ${game.level}`;
+        const linesText = `Lines: ${game.lines}`;
+        const levelText = `Level: ${game.level}`;
+        const percentText = `Tri %: ${triPercent}`;
 
         const scoreSprite = this._makeTextSprite(scoreText, {
+            fontFace: 'Courier New',
             fontSize: 56,
             scale: 0.015
         });
         const linesSprite = this._makeTextSprite(linesText, {
+            fontFace: 'Courier New',
             fontSize: 56,
             scale: 0.015
         });
         const levelSprite = this._makeTextSprite(levelText, {
+            fontFace: 'Courier New',
             fontSize: 56,
             scale: 0.015
+        });
+        const percentSprite = this._makeTextSprite(percentText, { 
+            fontFace: 'Courier New',
+            fontSize: 56, 
+            scale: 0.015,
         });
 
         // Position the UI to the right of the board in world space
@@ -509,8 +563,9 @@ class ThreeTritrisRenderer {
         scoreSprite.position.set(baseX, baseY, z);
         linesSprite.position.set(baseX, baseY - this.cellSize * 1.0, z);
         levelSprite.position.set(baseX, baseY - this.cellSize * 2.0, z);
+        percentSprite.position.set(baseX, baseY - this.cellSize * 7.0, z);
 
-        this.uiGroup.add(scoreSprite, linesSprite, levelSprite);
+        this.uiGroup.add(scoreSprite, linesSprite, levelSprite, percentSprite);
         
         if (paused) {
             const pausedSprite = this._makeTextSprite('PAUSED', {
@@ -540,43 +595,44 @@ class ThreeTritrisRenderer {
 
         //  LOCKED GRID 
         const grid = game.grid.grid;
-        for (let row = 0; row < game.h; row++) {
-            for (let col = 0; col < game.w; col++) {
-                const cell = grid[row][col];
-                if (!cell || !cell.tris) continue;
+        if (!paused) {
+            for (let row = 0; row < game.h; row++) {
+                for (let col = 0; col < game.w; col++) {
+                    const cell = grid[row][col];
+                    if (!cell || !cell.tris) continue;
 
-                for (let subRow = 0; subRow < 2; subRow++) {
-                    for (let subCol = 0; subCol < 2; subCol++) {
-                        const tri = cell.tris[subRow][subCol];
-                        if (!tri) continue;
+                    for (let subRow = 0; subRow < 2; subRow++) {
+                        for (let subCol = 0; subCol < 2; subCol++) {
+                            const tri = cell.tris[subRow][subCol];
+                            if (!tri) continue;
 
-                        const colorIndex = tri.clr; 
-                        const key = `${row},${col},${subRow},${subCol}`;
-                        currentLocked.add(key);
+                            const colorIndex = tri.clr; 
+                            const key = `${row},${col},${subRow},${subCol}`;
+                            currentLocked.add(key);
 
-                        if (!this.prevLocked.has(key)) {
-                            newlyLocked.push({ row, col, subRow, subCol, clr: colorIndex });
-                            if (newlyLocked.length == 1) {
-                                sfx.play("lock", Math.random() * 400 + 600);
-                                this.startBoardBounce();
+                            if (!this.prevLocked.has(key)) {
+                                newlyLocked.push({ row, col, subRow, subCol, clr: colorIndex });
+                                if (newlyLocked.length == 1) {
+                                    sfx.play("lock", Math.random() * 400 + 600);
+                                    this.startBoardBounce();
+                                }
+
                             }
 
+                            this._addTriangleMesh(
+                                this.boardGroup,
+                                col,
+                                row,
+                                subRow,
+                                subCol,
+                                colorIndex,
+                                false
+                            );
                         }
-
-                        this._addTriangleMesh(
-                            this.boardGroup,
-                            col,
-                            row,
-                            subRow,
-                            subCol,
-                            colorIndex,
-                            false
-                        );
                     }
                 }
             }
         }
-
         // spawn placement particles and shockwave for newly locked cells
         if (newlyLocked.length < 4){
             for (const cell of newlyLocked) {
@@ -1056,7 +1112,11 @@ class ThreeTritrisRenderer {
         // next piece rotation and glow modulation
         if (this.nextPiecePivot) {
             // console.log('rotating next piece');
-            this.nextPiecePivot.rotation.y = t * 3.1;
+            if (settings.spinNextPiece) {
+                this.nextPiecePivot.rotation.y = t * 3.1;
+            } else {
+                this.nextPiecePivot.rotation.y = 0; 
+            }
 
             if (this.nextPieceGlow && this.nextPieceGlow.material) {
                 this.nextPieceGlow.material.opacity =
