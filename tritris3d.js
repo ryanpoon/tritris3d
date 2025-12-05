@@ -277,12 +277,19 @@ class ThreeTritrisRenderer {
         });
         soundSprite.position.set(-5, -0.8, 10); 
         
-        const controlsSprite = this._makeTextSprite("Select options with Up/Down and adjust with Left/Right", {
+        const optionsSprite = this._makeTextSprite("Select options with Up/Down and adjust with Left/Right", {
             fontSize: 40,
             textColor: '#aaaaaa',
             scale: 0.012
         });
-        controlsSprite.position.set(-5, -2.5, 10);
+        optionsSprite.position.set(-5, -2.5, 10);
+
+        const controlsSprite = this._makeTextSprite("Controls: Rotate X/Z, move with arrow keys", {
+            fontSize: 40,
+            textColor: '#aaaaaa',
+            scale: 0.012
+        });
+        controlsSprite.position.set(-5, -3.5, 10);
         
         // high Score
         const hsSprite = this._makeTextSprite(`High Score: ${highScore || 0}`, {
@@ -331,7 +338,7 @@ class ThreeTritrisRenderer {
         startSprite.position.set(-5, -6, 10);
         
 
-        this.uiGroup.add(titleSprite, levelSprite, spinSprite, soundSprite, 
+        this.uiGroup.add(titleSprite, levelSprite, spinSprite, soundSprite, optionsSprite,
             lsSprite, hsSprite, controlsSprite, creditsSprite, startSprite,
             creditsSprite2);
         this.uiGroup.userData.isMenu = true;
