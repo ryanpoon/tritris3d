@@ -29,14 +29,14 @@ function setup() {
     }
 
     dom.recordsDiv = select('#records');
-    dom.recordsDiv.style('visibility: visible');
+    dom.recordsDiv.style('visibility: hidden');
     setHighScores(0, 0, true); //Sets some default scores
 
     dom.titleDiv = select('#title');
-    dom.titleDiv.style('visibility: visible');
+    dom.titleDiv.style('visibility: hidden');
 
     dom.playDiv = select('#play');
-    dom.playDiv.style('visibility: visible');
+    dom.playDiv.style('visibility: hidden');
 
     dom.level = select('#level'); //Select
     dom.level.value(getSavedValue('startLevel', 0));
@@ -121,6 +121,7 @@ function draw() {
     }
     if (gameState == gameStates.MENU) {
         cursor();
+        renderThreeMenu(); 
         return;
     }
 
@@ -188,6 +189,22 @@ function controllerKeyPressed() {
 }
 
 function keyPressed() {
+    if (gameState == gameStates.MENU) {
+        let currentLvl = parseInt(dom.level.value()) || 0;
+        
+        if (keyCode === LEFT_ARROW) {
+            currentLvl--;
+            if (currentLvl < 0) currentLvl = 29; // Wrap around
+            dom.level.value(currentLvl);
+        } 
+        else if (keyCode === RIGHT_ARROW) {
+            currentLvl++;
+            if (currentLvl > 29) currentLvl = 0; // Wrap around
+            dom.level.value(currentLvl);
+        }
+        
+        if (keyCode !== controls.start) return; 
+    }
     if (settingControl != null) {
         setControl(keyCode);
     } else if (isPressed(controls.start)) {

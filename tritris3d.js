@@ -17,7 +17,7 @@ function initThreeRenderer() {
     threeRenderer = new ThreeTritrisRenderer();
 }
 
-// Called every frame from draw(), after game.update()
+// Called every frame from draw() when gameState is INGAME or PAUSED
 function renderThreeFromGame(game, paused) {
     if (!threeRenderer || !game) return;
     
@@ -41,6 +41,19 @@ function renderThreeFromGame(game, paused) {
     threeRenderer.render();
 }
 
+// called every frame from draw() when gameState is MENU
+function renderThreeMenu() {
+    if (!threeRenderer) return;
+    
+    if (threeRenderer.gridGroup.children.length === 0) {
+        threeRenderer._createGridLines();
+    }
+
+    const currentLvl = parseInt(select('#level').value()) || 0;
+    threeRenderer.showMenuUI(currentLvl);
+    threeRenderer.stars.rotation.y += 0.0003; 
+    threeRenderer.render();
+}
 class ThreeTritrisRenderer {
     constructor() {
         this.scene = new THREE.Scene();
@@ -150,6 +163,80 @@ class ThreeTritrisRenderer {
         this._createStarfield();
 
         
+    }
+
+    showMenuUI(currentLevel) {
+        if (this.uiGroup.userData.isMenu) {
+            if (this.uiGroup.userData.lastLevel !== currentLevel) {
+                this._updateMenuLevelText(currentLevel);
+                this.uiGroup.userData.lastLevel = currentLevel;
+            }
+            return;
+        }
+
+        this._clearGroup(this.uiGroup);
+        this._clearGroup(this.nextPieceGroup);
+        this._clearGroup(this.activeGroup);
+
+        // main title
+        const titleSprite = this._makeTextSprite("TRITRIS 3D", {
+            fontSize: 120,
+            textColor: '#00ffff',
+            glowColor: '#00aaaa',
+            scale: 0.025
+        });
+        titleSprite.position.set(-8, 6, 10); 
+
+        // level Selector
+        this.levelSprite = new THREE.Sprite(); 
+        this._updateMenuLevelText(currentLevel || 0);
+        this.levelSprite.position.set(0, 1, 10);
+        
+        const controlsSprite = this._makeTextSprite("adjust with Left/Right", {
+            fontSize: 40,
+            textColor: '#aaaaaa',
+            scale: 0.012
+        });
+        controlsSprite.position.set(0, 0, 10);
+        
+
+        // credits
+        const creditsSprite = this._makeTextSprite("Made by: Ryan Poon for CS 175", {
+            fontSize: 40,
+            textColor: '#ff00ff',
+            scale: 0.012
+        });
+        creditsSprite.position.set(4, -3, 10);
+        
+
+        // start Instruction 
+        const startSprite = this._makeTextSprite("PRESS ENTER TO START", {
+            fontSize: 60,
+            textColor: '#ffffff',
+            glowColor: '#ffffff',
+            scale: 0.015
+        });
+        startSprite.position.set(-5, -6, 10);
+        
+
+        this.uiGroup.add(titleSprite, this.levelSprite, controlsSprite, creditsSprite, startSprite);
+        this.uiGroup.userData.isMenu = true;
+        this.uiGroup.userData.lastLevel = currentLevel;
+    }
+
+    _updateMenuLevelText(level) {
+        if (!this.levelSprite) return;
+        
+        const newSprite = this._makeTextSprite(`Level: ${level}`, {
+            fontSize: 70,
+            textColor: '#ffcc00',
+            glowColor: '#ffaa00',
+            scale: 0.018
+        });
+        
+        this.levelSprite.material.dispose();
+        this.levelSprite.material = newSprite.material;
+        this.levelSprite.scale.copy(newSprite.scale);
     }
 
     _onResize() {
@@ -388,6 +475,7 @@ class ThreeTritrisRenderer {
 
 
     updateFromGame(game, paused) {
+        this.uiGroup.userData.isMenu = false;
         const currentLocked = new Set();
         const newlyLocked = [];
         this.boardWidth = game.w;
