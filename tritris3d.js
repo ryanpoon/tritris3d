@@ -622,7 +622,10 @@ class ThreeTritrisRenderer {
 
 
     updateFromGame(game, paused) {
-        this.uiGroup.userData.isMenu = false;
+        if (this.uiGroup.userData.isMenu) {
+            this.uiGroup.userData.isMenu = false;
+            this.lastScore = -1;
+        }
         if (game.alive) {
             this.hasExploded = false;
             this.gameOverStart = 0;
