@@ -542,7 +542,13 @@ class ThreeTritrisRenderer {
 
 
     _updateUI(game, paused) {
-        // Clear previous UI
+        if (this.lastScore === game.score && 
+            this.lastLines === game.lines && 
+            this.lastLevel === game.level &&
+            this.lastPaused === paused) {
+            return;
+        }
+        // clear previous UI
         while (this.uiGroup.children.length > 0) {
             const c = this.uiGroup.children.pop();
             if (c.material && c.material.map) c.material.map.dispose();
@@ -551,12 +557,7 @@ class ThreeTritrisRenderer {
 
         if (!game) return;
 
-        if (this.lastScore === game.score && 
-            this.lastLines === game.lines && 
-            this.lastLevel === game.level &&
-            this.lastPaused === paused) {
-            return;
-        }
+        
 
         let triPercent = 0;
         if (game.lines > 0) {
@@ -613,6 +614,10 @@ class ThreeTritrisRenderer {
             pausedSprite.position.set(0, 0, 1.0);
             this.uiGroup.add(pausedSprite);
         }
+        this.lastScore = game.score;
+        this.lastLines = game.lines;
+        this.lastLevel = game.level;
+        this.lastPaused = paused;
     }
 
 
@@ -1269,6 +1274,27 @@ class ThreeTritrisRenderer {
                         if (tri) {
                             const cx = (col - this.boardWidth / 2 + 0.5) * this.cellSize;
                             const cy = (this.boardHeight / 2 - row - 0.5) * this.cellSize;
+                            this.spawnParticles(cx, cy, 0x88ffff, 3.0, 6);
+                        }
+                    }
+                }
+            }
+        }
+        const p = game.currentPiece; // explode active piece instance
+        if (!p) return;
+        for (let row = 0; row < p.grid.length; row++) {
+            for (let col = 0; col < p.grid[0].length; col++) {
+                const cell = p.grid[row][col];
+                if (!cell || !cell.tris) continue;
+
+                for (let subRow = 0; subRow < 2; subRow++) {
+                    for (let subCol = 0; subCol < 2; subCol++) {
+                        const tri = cell.tris[subRow][subCol];
+                        if (tri) {
+                            const worldRow = row + p.pos.y;
+                            const worldCol = col + p.pos.x;
+                            const cx = (worldCol - this.boardWidth / 2 + 0.5) * this.cellSize;
+                            const cy = (this.boardHeight / 2 - worldRow - 0.5) * this.cellSize;
                             this.spawnParticles(cx, cy, 0x88ffff, 3.0, 6);
                         }
                     }
